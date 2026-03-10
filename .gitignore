@@ -1,10 +1,3 @@
-
-
-
-# Jetbrains Products
-# Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, Android Studio, WebStorm and Rider
-# Reference: https://intellij-support.jetbrains.com/hc/en-us/articles/206544839
-
 # User-specific stuff
 .idea/**/workspace.xml
 .idea/**/tasks.xml
@@ -180,10 +173,28 @@ node_modules/
 # Vite build output
 dist/
 
-# OS clutter
-.DS_Store
-Thumbs.db
-
 # editor
 .vscode/
 .idea/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Data files (large/sensitive — obtain separately)
+data/*.csv
+data/*.xlsx
+data/*.pdf
+data/*.xls
+data_analysis/data/*.csv
+data_analysis/data/*.xlsx
+data_analysis/data/*.pdf
+data_analysis/data/*.xls
+
+# Generated outputs
+summary_tables.xlsx
