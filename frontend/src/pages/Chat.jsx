@@ -16,9 +16,9 @@ export default function Chat() {
     ];
 
     return (
-        <div className="flex-1 flex flex-col lg:flex-row gap-6 h-[calc(100vh-8rem)]">
+        <div className="flex-1 flex flex-col gap-6 h-[calc(100vh-8rem)]">
 
-            {/* Left Column: Chat Area */}
+            {/* Chat Area */}
             <div className="flex-1 flex flex-col bg-white rounded-2xl border border-cfjj-border/60 shadow-sm overflow-hidden animate-fade-in">
 
                 {/* Chat Timeline (Welcome State for now) */}
@@ -97,84 +97,6 @@ export default function Chat() {
                 </div>
             </div>
 
-            {/* Right Column: Context/Evidence Panel */}
-            <div className="w-full lg:w-80 flex flex-col gap-4 animate-slide-up flex-shrink-0">
-
-                {/* Source References */}
-                <div className="bg-white rounded-xl border border-cfjj-border/60 p-5 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-heading font-semibold text-cfjj-navy text-sm flex items-center gap-2">
-                            <FileText className="w-4 h-4 text-cfjj-blue" />
-                            Active Context
-                        </h3>
-                        <span className="text-[10px] uppercase tracking-wider font-mono text-cfjj-text-secondary font-semibold bg-cfjj-muted px-2 py-1 rounded">
-                            Default
-                        </span>
-                    </div>
-                    <p className="text-xs text-cfjj-text-secondary leading-relaxed mb-4">
-                        Current analysis includes complaint narratives and structured intake records from the latest upload set.
-                    </p>
-                    <div className="space-y-2">
-                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-cfjj-bg border border-cfjj-border/50">
-                            <div className="flex items-center gap-2">
-                                <FileText className="w-3.5 h-3.5 text-cfjj-text-secondary" />
-                                <span className="text-xs font-medium text-cfjj-text-primary">2024_Complaints.csv</span>
-                            </div>
-                            <span className="text-xs text-cfjj-text-secondary/70">8.2 MB</span>
-                        </div>
-                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-cfjj-bg border border-cfjj-border/50">
-                            <div className="flex items-center gap-2">
-                                <FileText className="w-3.5 h-3.5 text-cfjj-text-secondary" />
-                                <span className="text-xs font-medium text-cfjj-text-primary">BPD_Intakes_Q2.csv</span>
-                            </div>
-                            <span className="text-xs text-cfjj-text-secondary/70">1.4 MB</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Quick Insights */}
-                <div className="bg-white rounded-xl border border-cfjj-border/60 p-5 shadow-sm">
-                    <h3 className="font-heading font-semibold text-cfjj-navy text-sm flex items-center gap-2 mb-4">
-                        <Activity className="w-4 h-4 text-cfjj-blue" />
-                        Data Overview
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="p-3 bg-cfjj-muted rounded-lg flex flex-col gap-1">
-                            <span className="text-cfjj-text-secondary text-xs font-medium">Records Processed</span>
-                            <span className="font-mono text-cfjj-navy text-lg font-bold">14,204</span>
-                        </div>
-                        <div className="p-3 bg-cfjj-muted rounded-lg flex flex-col gap-1">
-                            <span className="text-cfjj-text-secondary text-xs font-medium">Narratives Built</span>
-                            <span className="font-mono text-cfjj-navy text-lg font-bold">9,411</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Suggested Follow-Ups */}
-                <div className="bg-cfjj-navy text-white rounded-xl p-5 shadow-inner">
-                    <h3 className="font-heading font-semibold text-sm flex items-center gap-2 mb-4 text-cfjj-surface">
-                        <BarChart3 className="w-4 h-4 text-cfjj-soft-sky" />
-                        Analytical Paths
-                    </h3>
-                    <div className="space-y-2">
-                        {[
-                            "Compare with prior uploads",
-                            "Show most repeated concerns",
-                            "Summarize differences by category"
-                        ].map((path, i) => (
-                            <button
-                                key={i}
-                                className="w-full flex items-center justify-between text-left text-xs text-cfjj-soft-sky hover:text-white p-2.5 rounded-lg bg-white/5 hover:bg-white/10 transition-colors group"
-                                onClick={() => setInput(path)}
-                            >
-                                <span>{path}</span>
-                                <ChevronRight className="w-3.5 h-3.5 opacity-50 group-hover:opacity-100" />
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-            </div>
         </div>
     );
 }

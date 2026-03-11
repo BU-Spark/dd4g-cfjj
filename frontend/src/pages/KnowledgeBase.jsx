@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
     UploadCloud, FileSpreadsheet, CheckCircle2,
     Clock, AlertCircle, RefreshCw, MoreVertical,
-    Database, HardDrive, FileText
+    HardDrive, FileText
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -79,17 +79,6 @@ export default function KnowledgeBase() {
                         Upload CSV files to refresh the data used for source-backed analysis.
                     </p>
                 </div>
-
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-cfjj-border/60 shadow-sm">
-                        <Database className="w-4 h-4 text-cfjj-blue" />
-                        <span className="text-sm font-medium text-cfjj-navy">17,751 Records</span>
-                    </div>
-                    <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cfjj-muted text-cfjj-navy hover:bg-cfjj-border/50 border border-cfjj-border/60 transition-colors text-sm font-medium">
-                        <RefreshCw className="w-4 h-4" />
-                        Sync Status
-                    </button>
-                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -133,32 +122,31 @@ export default function KnowledgeBase() {
                             Ingestion Process
                         </h3>
 
-                        <div className="space-y-4 relative before:absolute before:inset-0 before:ml-3.5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-cfjj-muted hidden"></div>
+                        <div className="space-y-4">
+                            <div className="flex items-start gap-4">
+                                <div className="w-7 h-7 rounded-full bg-cfjj-muted flex items-center justify-center text-xs font-bold text-cfjj-navy ring-4 ring-white">1</div>
+                                <div>
+                                    <h4 className="text-sm font-semibold text-cfjj-navy">File Received</h4>
+                                    <p className="text-xs text-cfjj-text-secondary">Validated and stored securely.</p>
+                                </div>
+                            </div>
 
-                        <div className="flex items-start gap-4">
-                            <div className="w-7 h-7 rounded-full bg-cfjj-muted flex items-center justify-center text-xs font-bold text-cfjj-navy z-10 ring-4 ring-white">1</div>
-                            <div className="pt-0.5">
-                                <h4 className="text-sm font-semibold text-cfjj-navy">File Received</h4>
-                                <p className="text-xs text-cfjj-text-secondary mt-0.5">Validated and stored securely.</p>
+                            <div className="flex items-start gap-4">
+                                <div className="w-7 h-7 rounded-full bg-cfjj-muted flex items-center justify-center text-xs font-bold text-cfjj-navy ring-4 ring-white">2</div>
+                                <div>
+                                    <h4 className="text-sm font-semibold text-cfjj-navy">Processing Data</h4>
+                                    <p className="text-xs text-cfjj-text-secondary">Extracting rows and normalizing fields.</p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-start gap-4">
+                                <div className="w-7 h-7 rounded-full bg-cfjj-orange/10 flex items-center justify-center text-xs font-bold text-cfjj-orange ring-4 ring-white">3</div>
+                                <div>
+                                    <h4 className="text-sm font-semibold text-cfjj-navy">Ready to Search</h4>
+                                    <p className="text-xs text-cfjj-text-secondary">Available in the Analysis Workspace.</p>
+                                </div>
                             </div>
                         </div>
-
-                        <div className="flex items-start gap-4">
-                            <div className="w-7 h-7 rounded-full bg-cfjj-muted flex items-center justify-center text-xs font-bold text-cfjj-navy z-10 ring-4 ring-white">2</div>
-                            <div className="pt-0.5">
-                                <h4 className="text-sm font-semibold text-cfjj-navy">Processing Data</h4>
-                                <p className="text-xs text-cfjj-text-secondary mt-0.5">Extracting rows and normalizing fields.</p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-start gap-4">
-                            <div className="w-7 h-7 rounded-full bg-cfjj-orange/10 flex items-center justify-center text-xs font-bold text-cfjj-orange z-10 ring-4 ring-white">3</div>
-                            <div className="pt-0.5">
-                                <h4 className="text-sm font-semibold text-cfjj-navy">Ready to Search</h4>
-                                <p className="text-xs text-cfjj-text-secondary mt-0.5">Available in the Analysis Workspace.</p>
-                            </div>
-                        </div>
-
                     </div>
 
                 </div>
@@ -230,7 +218,6 @@ export default function KnowledgeBase() {
                         </table>
                     </div>
 
-                    {/* Empty State / Footer if needed */}
                     <div className="p-4 border-t border-cfjj-border/60 bg-cfjj-bg/30 text-center text-xs text-cfjj-text-secondary/80 font-medium">
                         Files are automatically processed upon upload. Review logs for 'Needs Review' items.
                     </div>
