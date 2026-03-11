@@ -6,6 +6,14 @@ const router = express.Router();
 
 router.use(requireAuth());
 
+function requireAdmin(req, res, next) {
+    const role = req.auth.sessionClaims?.publicMetadata?.role;
+    if (role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+    next();
+}
+
 async function getAccessToken() {
     const keyJson = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
     const auth = new GoogleAuth({
@@ -93,6 +101,12 @@ router.get('/files/download', async (req, res) => {
         console.error('RAG download error:', err);
         res.status(500).json({ error: 'Failed to download file' });
     }
+});
+
+// POST /api/rag/files/upload — admin only
+router.post('/files/upload', requireAdmin, async (req, res) => {
+    // TODO: implement file upload to Vertex AI RAG corpus
+    res.status(501).json({ error: 'Not implemented yet' });
 });
 
 module.exports = router;

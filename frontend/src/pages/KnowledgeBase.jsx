@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
     UploadCloud, FileSpreadsheet, CheckCircle2,
-    RefreshCw, Download, Database, HardDrive, FileText, Loader2, AlertCircle
+    RefreshCw, Download, Database, HardDrive, FileText, Loader2, AlertCircle, Lock
 } from 'lucide-react';
-import { useAuth } from '@clerk/react';
+import { useAuth, useUser } from '@clerk/react';
 import { cn } from '../lib/utils';
 import { createApiClient } from '../lib/api';
 
@@ -27,6 +27,8 @@ function formatTotalSize(files) {
 
 export default function KnowledgeBase() {
     const { getToken } = useAuth();
+    const { user } = useUser();
+    const isAdmin = user?.publicMetadata?.role === 'admin';
     const api = useCallback(() => createApiClient(getToken), [getToken])();
 
     const [isDragging, setIsDragging] = useState(false);
@@ -103,34 +105,48 @@ export default function KnowledgeBase() {
                 {/* Left Column: Upload & Workflow */}
                 <div className="lg:col-span-1 space-y-6">
 
-                    {/* Upload Dropzone */}
-                    <div
-                        className={cn(
-                            "relative group rounded-2xl border-2 border-dashed p-8 text-center transition-all bg-white flex flex-col items-center justify-center min-h-[240px]",
-                            isDragging
-                                ? "border-cfjj-blue bg-cfjj-muted/50 scale-[1.02]"
-                                : "border-cfjj-border/80 hover:border-cfjj-navy/40 hover:bg-cfjj-muted/20"
-                        )}
-                        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                        onDragLeave={() => setIsDragging(false)}
-                        onDrop={(e) => { e.preventDefault(); setIsDragging(false); }}
-                    >
-                        <div className="w-14 h-14 bg-cfjj-muted rounded-full flex items-center justify-center mb-4 text-cfjj-blue group-hover:scale-110 transition-transform duration-300">
-                            <UploadCloud className="w-7 h-7" />
+                    {/* Upload Dropzone — admin only */}
+                    {isAdmin ? (
+                        <div
+                            className={cn(
+                                "relative group rounded-2xl border-2 border-dashed p-8 text-center transition-all bg-white flex flex-col items-center justify-center min-h-[240px]",
+                                isDragging
+                                    ? "border-cfjj-blue bg-cfjj-muted/50 scale-[1.02]"
+                                    : "border-cfjj-border/80 hover:border-cfjj-navy/40 hover:bg-cfjj-muted/20"
+                            )}
+                            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                            onDragLeave={() => setIsDragging(false)}
+                            onDrop={(e) => { e.preventDefault(); setIsDragging(false); }}
+                        >
+                            <div className="w-14 h-14 bg-cfjj-muted rounded-full flex items-center justify-center mb-4 text-cfjj-blue group-hover:scale-110 transition-transform duration-300">
+                                <UploadCloud className="w-7 h-7" />
+                            </div>
+                            <h3 className="text-base font-semibold text-cfjj-navy mb-1.5">
+                                Upload Sources
+                            </h3>
+                            <p className="text-sm text-cfjj-text-secondary mb-6 max-w-[200px]">
+                                Drop CSV files here or browse to upload new source data
+                            </p>
+                            <button className="px-5 py-2.5 rounded-xl bg-cfjj-navy text-white text-sm font-medium hover:bg-cfjj-deep-blue transition-colors shadow-sm w-full mx-auto max-w-[200px]">
+                                Select Files
+                            </button>
+                            <p className="text-xs text-cfjj-text-secondary/70 mt-4 font-mono">
+                                CSV only, up to 50MB per file
+                            </p>
                         </div>
-                        <h3 className="text-base font-semibold text-cfjj-navy mb-1.5">
-                            Upload Sources
-                        </h3>
-                        <p className="text-sm text-cfjj-text-secondary mb-6 max-w-[200px]">
-                            Drop CSV files here or browse to upload new source data
-                        </p>
-                        <button className="px-5 py-2.5 rounded-xl bg-cfjj-navy text-white text-sm font-medium hover:bg-cfjj-deep-blue transition-colors shadow-sm w-full mx-auto max-w-[200px]">
-                            Select Files
-                        </button>
-                        <p className="text-xs text-cfjj-text-secondary/70 mt-4 font-mono">
-                            CSV only, up to 50MB per file
-                        </p>
-                    </div>
+                    ) : (
+                        <div className="rounded-2xl border-2 border-dashed border-cfjj-border/60 p-8 text-center bg-white flex flex-col items-center justify-center min-h-[240px]">
+                            <div className="w-14 h-14 bg-cfjj-muted rounded-full flex items-center justify-center mb-4 text-cfjj-text-secondary">
+                                <Lock className="w-6 h-6" />
+                            </div>
+                            <h3 className="text-base font-semibold text-cfjj-navy mb-1.5">
+                                View Only
+                            </h3>
+                            <p className="text-sm text-cfjj-text-secondary max-w-[200px]">
+                                Only admins can upload new source files.
+                            </p>
+                        </div>
+                    )}
 
                     {/* Workflow Cards */}
                     <div className="bg-white rounded-2xl border border-cfjj-border/60 p-5 space-y-4 shadow-sm">
