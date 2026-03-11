@@ -1,5 +1,6 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Database, CheckCircle2, Shield } from 'lucide-react';
+import { Database, Shield } from 'lucide-react';
+import { UserButton } from '@clerk/react';
 import { cn } from '../lib/utils';
 
 export default function Layout() {
@@ -45,22 +46,13 @@ export default function Layout() {
                         </nav>
                     </div>
 
-                    {/* Right: Status / Internal Label */}
+                    {/* Right: User controls */}
                     <div className="flex items-center gap-4">
                         <div className="hidden lg:flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-cfjj-muted text-cfjj-text-secondary text-xs font-medium border border-cfjj-border/60">
                             <Database className="w-3.5 h-3.5" />
                             <span>Internal Workspace</span>
                         </div>
-
-                        <div className="flex flex-col items-end">
-                            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                Data Ready
-                            </div>
-                            <span className="text-[10px] font-mono text-cfjj-text-secondary uppercase tracking-wider mt-0.5">
-                                Last Sync: Just now
-                            </span>
-                        </div>
+                        <UserButton afterSignOutUrl="/" />
                     </div>
 
                 </div>
