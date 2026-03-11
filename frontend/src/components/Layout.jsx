@@ -1,5 +1,10 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
+<<<<<<< HEAD
 import { Shield } from 'lucide-react';
+=======
+import { Database, Shield } from 'lucide-react';
+import { UserButton } from '@clerk/react';
+>>>>>>> main
 import { cn } from '../lib/utils';
 
 export default function Layout() {
@@ -45,6 +50,18 @@ export default function Layout() {
                         </nav>
                     </div>
 
+<<<<<<< HEAD
+=======
+                    {/* Right: User controls */}
+                    <div className="flex items-center gap-4">
+                        <div className="hidden lg:flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-cfjj-muted text-cfjj-text-secondary text-xs font-medium border border-cfjj-border/60">
+                            <Database className="w-3.5 h-3.5" />
+                            <span>Internal Workspace</span>
+                        </div>
+                        <UserButton afterSignOutUrl="/" />
+                    </div>
+
+>>>>>>> main
                 </div>
             </header>
 
