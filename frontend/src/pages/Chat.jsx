@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
-    Send, Sparkles, FileText, Activity,
-    BarChart3, Folders, Clock, ChevronRight, MessageSquare,
-    Plus, Trash2, Loader2
+    Send, Sparkles, Folders, MessageSquare, Bot, User,
+    Plus, Trash2, Loader2, Clock
 } from 'lucide-react';
 import { useAuth } from '@clerk/react';
 import { cn } from '../lib/utils';
@@ -18,7 +17,8 @@ export default function Chat() {
     const [chatList, setChatList] = useState([]);
     const [sending, setSending] = useState(false);
     const [loadingChats, setLoadingChats] = useState(true);
-    const messagesEndRef = useRef(null);
+    const bottomRef = useRef(null);
+    const textareaRef = useRef(null);
 
     const suggestedPrompts = [
         "What trends are emerging across complaint narratives?",
@@ -27,7 +27,6 @@ export default function Chat() {
         "Are there notable patterns across officer-related narratives?"
     ];
 
-    // Load chat list on mount
     useEffect(() => {
         api.listChats()
             .then(setChatList)
@@ -35,10 +34,16 @@ export default function Chat() {
             .finally(() => setLoadingChats(false));
     }, []);
 
-    // Scroll to bottom when messages change
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages, sending]);
+
+    useEffect(() => {
+        const t = textareaRef.current;
+        if (!t) return;
+        t.style.height = 'auto';
+        t.style.height = `${Math.min(t.scrollHeight, 200)}px`;
+    }, [input]);
 
     function startNewChat() {
         setActiveChatId(null);
@@ -60,7 +65,7 @@ export default function Chat() {
         e.stopPropagation();
         try {
             await api.deleteChat(id);
-            setChatList((prev) => prev.filter((c) => c._id !== id));
+            setChatList(prev => prev.filter(c => c._id !== id));
             if (activeChatId === id) startNewChat();
         } catch (err) {
             console.error('Failed to delete chat:', err);
@@ -72,35 +77,31 @@ export default function Chat() {
         if (!text || sending) return;
 
         setSending(true);
-        const userMessage = { role: 'user', content: text };
-        setMessages((prev) => [...prev, userMessage]);
+        setMessages(prev => [...prev, { role: 'user', content: text }]);
         setInput('');
 
         try {
             let chatId = activeChatId;
 
             if (!chatId) {
-                // Create new chat
                 const newChat = await api.createChat(text);
                 chatId = newChat._id;
                 setActiveChatId(chatId);
-                setChatList((prev) => [
+                setChatList(prev => [
                     { _id: newChat._id, title: newChat.title, updatedAt: newChat.updatedAt },
                     ...prev,
                 ]);
             } else {
-                // Append user message
                 await api.appendMessage(chatId, 'user', text);
             }
 
-            // Placeholder assistant message
             const placeholder = { role: 'assistant', content: 'Analysis coming soon...' };
             await api.appendMessage(chatId, 'assistant', placeholder.content);
-            setMessages((prev) => [...prev, placeholder]);
+            setMessages(prev => [...prev, placeholder]);
 
         } catch (err) {
             console.error('Send failed:', err);
-            setMessages((prev) => [
+            setMessages(prev => [
                 ...prev,
                 { role: 'assistant', content: 'Something went wrong. Please try again.' },
             ]);
@@ -109,14 +110,17 @@ export default function Chat() {
         }
     }
 
-    function handleKeyDown(e) {
+    const handleKeyDown = (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSend();
         }
-    }
+    };
 
-    const hasMessages = messages.length > 0;
+    const handlePromptClick = (prompt) => {
+        setInput(prompt);
+        textareaRef.current?.focus();
+    };
 
     return (
         <div className="flex-1 flex flex-row gap-0 h-[calc(100vh-8rem)] overflow-hidden">
@@ -169,12 +173,13 @@ export default function Chat() {
             </div>
 
             {/* Center: Chat Area */}
-            <div className="flex-1 flex flex-col bg-white border-y border-cfjj-border/60 overflow-hidden animate-fade-in">
+            <div className="flex-1 flex flex-col bg-white border-y border-r border-cfjj-border/60 rounded-r-2xl overflow-hidden animate-fade-in">
 
-                {/* Messages or Welcome */}
                 <div className="flex-1 overflow-y-auto p-6 md:p-8">
-                    {!hasMessages ? (
-                        <div className="max-w-2xl mx-auto w-full flex flex-col items-center justify-center h-full space-y-8 animate-slide-up">
+
+                    {/* Welcome State */}
+                    {messages.length === 0 && !sending && (
+                        <div className="max-w-2xl mx-auto w-full flex flex-col items-center justify-center space-y-8 animate-slide-up min-h-full">
                             <div className="text-center space-y-3">
                                 <div className="mx-auto w-12 h-12 bg-cfjj-muted text-cfjj-navy rounded-xl flex items-center justify-center mb-6">
                                     <Sparkles className="w-6 h-6" />
@@ -192,7 +197,7 @@ export default function Chat() {
                                     <button
                                         key={i}
                                         className="flex items-start gap-4 p-4 text-left border border-cfjj-border/60 rounded-xl hover:border-cfjj-navy/30 hover:bg-cfjj-muted/50 transition-all group"
-                                        onClick={() => setInput(prompt)}
+                                        onClick={() => handlePromptClick(prompt)}
                                     >
                                         <MessageSquare className="w-5 h-5 mt-0.5 text-cfjj-blue group-hover:text-cfjj-navy flex-none" />
                                         <span className="text-sm font-medium text-cfjj-text-primary/90 leading-snug">
@@ -207,44 +212,55 @@ export default function Chat() {
                                 Responses are grounded in uploaded source data
                             </p>
                         </div>
-                    ) : (
-                        <div className="max-w-3xl mx-auto space-y-4">
-                            {messages.map((msg, i) => (
+                    )}
+
+                    {/* Conversation */}
+                    {messages.length > 0 && (
+                        <div className="max-w-3xl mx-auto w-full space-y-6">
+                            {messages.map((m, i) => (
                                 <div
                                     key={i}
                                     className={cn(
-                                        "flex gap-3",
-                                        msg.role === 'user' ? "justify-end" : "justify-start"
+                                        "flex gap-3 animate-fade-in",
+                                        m.role === 'user' ? "justify-end" : "justify-start"
                                     )}
                                 >
-                                    {msg.role === 'assistant' && (
-                                        <div className="w-7 h-7 rounded-lg bg-cfjj-muted text-cfjj-navy flex items-center justify-center flex-shrink-0 mt-1">
-                                            <Sparkles className="w-3.5 h-3.5" />
+                                    {m.role === 'assistant' && (
+                                        <div className="w-8 h-8 rounded-lg bg-cfjj-muted text-cfjj-navy flex items-center justify-center flex-none mt-1">
+                                            <Bot className="w-4 h-4" />
                                         </div>
                                     )}
-                                    <div
-                                        className={cn(
-                                            "max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
-                                            msg.role === 'user'
-                                                ? "bg-cfjj-navy text-white rounded-tr-sm"
-                                                : "bg-cfjj-muted text-cfjj-text-primary rounded-tl-sm"
-                                        )}
-                                    >
-                                        {msg.content}
+                                    <div className={cn(
+                                        "max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
+                                        m.role === 'user'
+                                            ? "bg-cfjj-navy text-white rounded-tr-sm"
+                                            : "bg-cfjj-muted text-cfjj-text-primary rounded-tl-sm"
+                                    )}>
+                                        {m.content}
                                     </div>
+                                    {m.role === 'user' && (
+                                        <div className="w-8 h-8 rounded-lg bg-cfjj-orange/10 text-cfjj-orange flex items-center justify-center flex-none mt-1">
+                                            <User className="w-4 h-4" />
+                                        </div>
+                                    )}
                                 </div>
                             ))}
+
+                            {/* Thinking indicator */}
                             {sending && (
-                                <div className="flex gap-3 justify-start">
-                                    <div className="w-7 h-7 rounded-lg bg-cfjj-muted text-cfjj-navy flex items-center justify-center flex-shrink-0 mt-1">
-                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <div className="flex gap-3 justify-start animate-fade-in">
+                                    <div className="w-8 h-8 rounded-lg bg-cfjj-muted text-cfjj-navy flex items-center justify-center flex-none mt-1">
+                                        <Bot className="w-4 h-4" />
                                     </div>
-                                    <div className="bg-cfjj-muted rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-cfjj-text-secondary italic">
-                                        Thinking...
+                                    <div className="bg-cfjj-muted rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1.5">
+                                        <span className="w-2 h-2 rounded-full bg-cfjj-navy/40 animate-bounce" style={{ animationDelay: '0ms' }} />
+                                        <span className="w-2 h-2 rounded-full bg-cfjj-navy/40 animate-bounce" style={{ animationDelay: '150ms' }} />
+                                        <span className="w-2 h-2 rounded-full bg-cfjj-navy/40 animate-bounce" style={{ animationDelay: '300ms' }} />
                                     </div>
                                 </div>
                             )}
-                            <div ref={messagesEndRef} />
+
+                            <div ref={bottomRef} />
                         </div>
                     )}
                 </div>
@@ -253,11 +269,13 @@ export default function Chat() {
                 <div className="p-4 border-t border-cfjj-border/50 bg-white flex-shrink-0">
                     <div className="max-w-3xl mx-auto relative rounded-xl hover:shadow-md transition-shadow">
                         <textarea
+                            ref={textareaRef}
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
                             placeholder="Ask about trends, recurring concerns, or patterns in the complaint data..."
-                            className="w-full resize-none min-h-[80px] bg-cfjj-bg border border-cfjj-border/60 rounded-xl p-4 pr-16 text-sm text-cfjj-text-primary focus:outline-none focus:ring-2 focus:ring-cfjj-blue/30 focus:border-cfjj-blue transition-all"
+                            rows={1}
+                            className="w-full resize-none min-h-[56px] bg-cfjj-bg border border-cfjj-border/60 rounded-xl p-4 pr-16 text-sm text-cfjj-text-primary focus:outline-none focus:ring-2 focus:ring-cfjj-blue/30 focus:border-cfjj-blue transition-all"
                         />
                         <button
                             onClick={handleSend}
@@ -287,86 +305,9 @@ export default function Chat() {
                         </span>
                     </div>
                 </div>
-            </div>
-
-            {/* Right Column: Context/Evidence Panel */}
-            <div className="w-72 flex-shrink-0 flex flex-col gap-4 bg-cfjj-bg border-l border-cfjj-border/60 rounded-r-2xl p-4 overflow-y-auto animate-slide-up">
-
-                {/* Source References */}
-                <div className="bg-white rounded-xl border border-cfjj-border/60 p-5 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-heading font-semibold text-cfjj-navy text-sm flex items-center gap-2">
-                            <FileText className="w-4 h-4 text-cfjj-blue" />
-                            Active Context
-                        </h3>
-                        <span className="text-[10px] uppercase tracking-wider font-mono text-cfjj-text-secondary font-semibold bg-cfjj-muted px-2 py-1 rounded">
-                            Default
-                        </span>
-                    </div>
-                    <p className="text-xs text-cfjj-text-secondary leading-relaxed mb-4">
-                        Current analysis includes complaint narratives and structured intake records from the latest upload set.
-                    </p>
-                    <div className="space-y-2">
-                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-cfjj-bg border border-cfjj-border/50">
-                            <div className="flex items-center gap-2">
-                                <FileText className="w-3.5 h-3.5 text-cfjj-text-secondary" />
-                                <span className="text-xs font-medium text-cfjj-text-primary">2024_Complaints.csv</span>
-                            </div>
-                            <span className="text-xs text-cfjj-text-secondary/70">8.2 MB</span>
-                        </div>
-                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-cfjj-bg border border-cfjj-border/50">
-                            <div className="flex items-center gap-2">
-                                <FileText className="w-3.5 h-3.5 text-cfjj-text-secondary" />
-                                <span className="text-xs font-medium text-cfjj-text-primary">BPD_Intakes_Q2.csv</span>
-                            </div>
-                            <span className="text-xs text-cfjj-text-secondary/70">1.4 MB</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Quick Insights */}
-                <div className="bg-white rounded-xl border border-cfjj-border/60 p-5 shadow-sm">
-                    <h3 className="font-heading font-semibold text-cfjj-navy text-sm flex items-center gap-2 mb-4">
-                        <Activity className="w-4 h-4 text-cfjj-blue" />
-                        Data Overview
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="p-3 bg-cfjj-muted rounded-lg flex flex-col gap-1">
-                            <span className="text-cfjj-text-secondary text-xs font-medium">Records Processed</span>
-                            <span className="font-mono text-cfjj-navy text-lg font-bold">14,204</span>
-                        </div>
-                        <div className="p-3 bg-cfjj-muted rounded-lg flex flex-col gap-1">
-                            <span className="text-cfjj-text-secondary text-xs font-medium">Narratives Built</span>
-                            <span className="font-mono text-cfjj-navy text-lg font-bold">9,411</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Suggested Follow-Ups */}
-                <div className="bg-cfjj-navy text-white rounded-xl p-5 shadow-inner">
-                    <h3 className="font-heading font-semibold text-sm flex items-center gap-2 mb-4 text-cfjj-surface">
-                        <BarChart3 className="w-4 h-4 text-cfjj-soft-sky" />
-                        Analytical Paths
-                    </h3>
-                    <div className="space-y-2">
-                        {[
-                            "Compare with prior uploads",
-                            "Show most repeated concerns",
-                            "Summarize differences by category"
-                        ].map((path, i) => (
-                            <button
-                                key={i}
-                                className="w-full flex items-center justify-between text-left text-xs text-cfjj-soft-sky hover:text-white p-2.5 rounded-lg bg-white/5 hover:bg-white/10 transition-colors group"
-                                onClick={() => setInput(path)}
-                            >
-                                <span>{path}</span>
-                                <ChevronRight className="w-3.5 h-3.5 opacity-50 group-hover:opacity-100" />
-                            </button>
-                        ))}
-                    </div>
-                </div>
 
             </div>
+
         </div>
     );
 }

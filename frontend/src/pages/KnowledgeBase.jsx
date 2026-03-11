@@ -1,49 +1,118 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import Papa from 'papaparse';
 import {
     UploadCloud, FileSpreadsheet, CheckCircle2,
-    Clock, AlertCircle, RefreshCw, MoreVertical,
-    Database, HardDrive, FileText
+    Clock, AlertCircle, RefreshCw,
+    HardDrive, FileText, X
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { uploadCSV } from '../api/client';
+
+const NARRATIVE_KEYWORDS = ['narrative', 'description', 'summary', 'notes', 'comment', 'text', 'detail'];
+const STRUCTURED_KEYWORDS = ['id', 'date', 'code', 'status', 'type', 'number', 'count', 'flag'];
+
+function detectType(headers) {
+    const lower = headers.map(h => h.toLowerCase());
+    const hasNarrative = lower.some(h => NARRATIVE_KEYWORDS.some(k => h.includes(k)));
+    const hasStructured = lower.some(h => STRUCTURED_KEYWORDS.some(k => h.includes(k)));
+    if (hasNarrative && hasStructured) return 'Mixed';
+    if (hasNarrative) return 'Narratives';
+    if (hasStructured) return 'Structured';
+    return 'Unknown';
+}
+
+function previewCSV(file) {
+    return new Promise((resolve, reject) => {
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+                resolve({
+                    rowCount: results.data.length,
+                    detectedType: detectType(results.meta.fields || []),
+                })
+            },
+            error: reject,
+        })
+    })
+}
 
 export default function KnowledgeBase() {
     const [isDragging, setIsDragging] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [uploadError, setUploadError] = useState(null);
+    const [files, setFiles] = useState([]);
+    const fileInputRef = useRef(null);
 
-    // Mock data for the table
-    const files = [
-        {
-            id: 1,
-            name: "2024_Q3_Complaints_Final.csv",
-            date: "Oct 12, 2024",
-            status: "Ready",
-            records: "4,201",
-            type: "Narratives",
-        },
-        {
-            id: 2,
-            name: "BPD_Intake_Logs_Recent.csv",
-            date: "Oct 10, 2024",
-            status: "Processing",
-            records: "1,150",
-            type: "Structured",
-        },
-        {
-            id: 3,
-            name: "Historical_Data_2023.csv",
-            date: "Oct 01, 2024",
-            status: "Ready",
-            records: "12,400",
-            type: "Mixed",
-        },
-        {
-            id: 4,
-            name: "Incomplete_Export.csv",
-            date: "Sep 28, 2024",
-            status: "Needs Review",
-            records: "0",
-            type: "Unknown",
+    const validateFile = (file) => {
+        if (!file.name.endsWith('.csv')) return 'Only CSV files are accepted.'
+        if (file.size > 50 * 1024 * 1024) return 'File exceeds 50MB limit.'
+        return null
+    }
+
+    const handleFile = async (file) => {
+        if (!file) return
+        setUploadError(null)
+
+        const error = validateFile(file)
+        if (error) { setUploadError(error); return }
+
+        // Pass 1 — browser preview (instant)
+        let preview = { rowCount: '—', detectedType: 'Unknown' }
+        try {
+            preview = await previewCSV(file)
+        } catch {
+            // non-blocking, fall back to defaults
         }
-    ];
+
+        const newEntry = {
+            id: Date.now(),
+            name: file.name,
+            date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            status: 'Processing',
+            records: preview.rowCount !== '—' ? preview.rowCount.toLocaleString() : '—',
+            type: preview.detectedType,
+        }
+        setFiles(f => [newEntry, ...f])
+        setUploading(true)
+
+        try {
+            // Pass 2 — backend returns accurate post-dedup count
+            const res = await uploadCSV(file)
+            setFiles(f => f.map(entry =>
+                entry.id === newEntry.id
+                    ? {
+                        ...entry,
+                        status: 'Ready',
+                        records: res.added.toLocaleString(),
+                        type: res.type ?? entry.type,
+                    }
+                    : entry
+            ))
+        } catch (e) {
+            setFiles(f => f.map(entry =>
+                entry.id === newEntry.id
+                    ? { ...entry, status: 'Failed' }
+                    : entry
+            ))
+            setUploadError('Upload failed. Please try again.')
+        } finally {
+            setUploading(false)
+        }
+    }
+
+    const handleDrop = (e) => {
+        e.preventDefault()
+        setIsDragging(false)
+        handleFile(e.dataTransfer.files[0])
+    }
+
+    const handleInputChange = (e) => {
+        handleFile(e.target.files[0])
+        e.target.value = ''
+    }
+
+    const handleRemove = (id) => setFiles(f => f.filter(entry => entry.id !== id))
 
     const getStatusIcon = (status) => {
         switch (status) {
@@ -53,7 +122,7 @@ export default function KnowledgeBase() {
             case 'Failed': return <AlertCircle className="w-4 h-4 text-red-500" />;
             default: return <Clock className="w-4 h-4 text-cfjj-text-secondary" />;
         }
-    };
+    }
 
     const getStatusBadge = (status) => {
         const base = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border";
@@ -64,12 +133,11 @@ export default function KnowledgeBase() {
             case 'Failed': return cn(base, "bg-red-50 text-red-700 border-red-200");
             default: return cn(base, "bg-gray-50 text-gray-700 border-gray-200");
         }
-    };
+    }
 
     return (
         <div className="flex-1 flex flex-col gap-8 animate-fade-in max-w-6xl mx-auto w-full">
 
-            {/* Header */}
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                 <div className="space-y-1">
                     <h1 className="text-2xl md:text-3xl font-heading font-bold text-cfjj-navy tracking-tight">
@@ -79,91 +147,95 @@ export default function KnowledgeBase() {
                         Upload CSV files to refresh the data used for source-backed analysis.
                     </p>
                 </div>
+            </div>
 
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-cfjj-border/60 shadow-sm">
-                        <Database className="w-4 h-4 text-cfjj-blue" />
-                        <span className="text-sm font-medium text-cfjj-navy">17,751 Records</span>
-                    </div>
-                    <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cfjj-muted text-cfjj-navy hover:bg-cfjj-border/50 border border-cfjj-border/60 transition-colors text-sm font-medium">
-                        <RefreshCw className="w-4 h-4" />
-                        Sync Status
+            {uploadError && (
+                <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium animate-fade-in">
+                    <AlertCircle className="w-4 h-4 flex-none" />
+                    {uploadError}
+                    <button onClick={() => setUploadError(null)} className="ml-auto text-red-400 hover:text-red-600 transition-colors">
+                        <X className="w-4 h-4" />
                     </button>
                 </div>
-            </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-                {/* Left Column: Upload & Workflow */}
+                {/* Left Column */}
                 <div className="lg:col-span-1 space-y-6">
 
-                    {/* Upload Dropzone */}
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".csv"
+                        className="hidden"
+                        onChange={handleInputChange}
+                    />
+
                     <div
                         className={cn(
                             "relative group rounded-2xl border-2 border-dashed p-8 text-center transition-all bg-white flex flex-col items-center justify-center min-h-[240px]",
-                            isDragging
-                                ? "border-cfjj-blue bg-cfjj-muted/50 scale-[1.02]"
-                                : "border-cfjj-border/80 hover:border-cfjj-navy/40 hover:bg-cfjj-muted/20"
+                            isDragging ? "border-cfjj-blue bg-cfjj-muted/50 scale-[1.02]" : "border-cfjj-border/80 hover:border-cfjj-navy/40 hover:bg-cfjj-muted/20",
+                            uploading && "pointer-events-none opacity-60"
                         )}
                         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                         onDragLeave={() => setIsDragging(false)}
-                        onDrop={(e) => { e.preventDefault(); setIsDragging(false); }}
+                        onDrop={handleDrop}
                     >
-                        <div className="w-14 h-14 bg-cfjj-muted rounded-full flex items-center justify-center mb-4 text-cfjj-blue group-hover:scale-110 transition-transform duration-300">
-                            <UploadCloud className="w-7 h-7" />
+                        <div className={cn(
+                            "w-14 h-14 bg-cfjj-muted rounded-full flex items-center justify-center mb-4 text-cfjj-blue transition-transform duration-300",
+                            !uploading && "group-hover:scale-110"
+                        )}>
+                            {uploading ? <RefreshCw className="w-7 h-7 animate-spin" /> : <UploadCloud className="w-7 h-7" />}
                         </div>
                         <h3 className="text-base font-semibold text-cfjj-navy mb-1.5">
-                            Upload Sources
+                            {uploading ? 'Uploading...' : 'Upload Sources'}
                         </h3>
                         <p className="text-sm text-cfjj-text-secondary mb-6 max-w-[200px]">
-                            Drop CSV files here or browse to upload new source data
+                            {uploading ? 'Processing your file, please wait.' : 'Drop CSV files here or browse to upload new source data'}
                         </p>
-                        <button className="px-5 py-2.5 rounded-xl bg-cfjj-navy text-white text-sm font-medium hover:bg-cfjj-deep-blue transition-colors shadow-sm w-full mx-auto max-w-[200px]">
-                            Select Files
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploading}
+                            className="px-5 py-2.5 rounded-xl bg-cfjj-navy text-white text-sm font-medium hover:bg-cfjj-deep-blue transition-colors shadow-sm w-full mx-auto max-w-[200px] disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {uploading ? 'Uploading...' : 'Select Files'}
                         </button>
                         <p className="text-xs text-cfjj-text-secondary/70 mt-4 font-mono">
                             CSV only, up to 50MB per file
                         </p>
                     </div>
 
-                    {/* Workflow Cards */}
                     <div className="bg-white rounded-2xl border border-cfjj-border/60 p-5 space-y-4 shadow-sm">
                         <h3 className="font-heading font-semibold text-cfjj-navy text-sm flex items-center gap-2 pb-2 border-b border-cfjj-border/40">
                             <HardDrive className="w-4 h-4 text-cfjj-text-secondary" />
                             Ingestion Process
                         </h3>
-
-                        <div className="space-y-4 relative before:absolute before:inset-0 before:ml-3.5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-cfjj-muted hidden"></div>
-
-                        <div className="flex items-start gap-4">
-                            <div className="w-7 h-7 rounded-full bg-cfjj-muted flex items-center justify-center text-xs font-bold text-cfjj-navy z-10 ring-4 ring-white">1</div>
-                            <div className="pt-0.5">
-                                <h4 className="text-sm font-semibold text-cfjj-navy">File Received</h4>
-                                <p className="text-xs text-cfjj-text-secondary mt-0.5">Validated and stored securely.</p>
-                            </div>
+                        <div className="space-y-4">
+                            {[
+                                { step: 1, title: 'File Received', desc: 'Validated and stored securely.', accent: false },
+                                { step: 2, title: 'Processing Data', desc: 'Extracting rows and normalizing fields.', accent: false },
+                                { step: 3, title: 'Ready to Search', desc: 'Available in the Analysis Workspace.', accent: true },
+                            ].map(({ step, title, desc, accent }) => (
+                                <div key={step} className="flex items-start gap-4">
+                                    <div className={cn(
+                                        "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ring-4 ring-white",
+                                        accent ? "bg-cfjj-orange/10 text-cfjj-orange" : "bg-cfjj-muted text-cfjj-navy"
+                                    )}>
+                                        {step}
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm font-semibold text-cfjj-navy">{title}</h4>
+                                        <p className="text-xs text-cfjj-text-secondary">{desc}</p>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-
-                        <div className="flex items-start gap-4">
-                            <div className="w-7 h-7 rounded-full bg-cfjj-muted flex items-center justify-center text-xs font-bold text-cfjj-navy z-10 ring-4 ring-white">2</div>
-                            <div className="pt-0.5">
-                                <h4 className="text-sm font-semibold text-cfjj-navy">Processing Data</h4>
-                                <p className="text-xs text-cfjj-text-secondary mt-0.5">Extracting rows and normalizing fields.</p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-start gap-4">
-                            <div className="w-7 h-7 rounded-full bg-cfjj-orange/10 flex items-center justify-center text-xs font-bold text-cfjj-orange z-10 ring-4 ring-white">3</div>
-                            <div className="pt-0.5">
-                                <h4 className="text-sm font-semibold text-cfjj-navy">Ready to Search</h4>
-                                <p className="text-xs text-cfjj-text-secondary mt-0.5">Available in the Analysis Workspace.</p>
-                            </div>
-                        </div>
-
                     </div>
 
                 </div>
 
-                {/* Right Column: Data Library Table */}
+                {/* Right Column */}
                 <div className="lg:col-span-2 flex flex-col bg-white rounded-2xl border border-cfjj-border/60 shadow-sm overflow-hidden">
 
                     <div className="px-6 py-5 border-b border-cfjj-border/60 flex items-center justify-between bg-cfjj-bg/50">
@@ -172,65 +244,78 @@ export default function KnowledgeBase() {
                             Data Library
                         </h2>
                         <div className="text-xs font-medium text-cfjj-text-secondary bg-white px-3 py-1.5 rounded-md border border-cfjj-border/60">
-                            4 Files Uploaded
+                            {files.length} {files.length === 1 ? 'File' : 'Files'} Uploaded
                         </div>
                     </div>
 
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="border-b border-cfjj-border/60 text-xs text-cfjj-text-secondary/80 font-mono tracking-wider bg-cfjj-bg/30">
-                                    <th className="px-6 py-4 font-semibold">File Name</th>
-                                    <th className="px-6 py-4 font-semibold">Status</th>
-                                    <th className="px-6 py-4 font-semibold">Records</th>
-                                    <th className="px-6 py-4 font-semibold hidden md:table-cell">Type</th>
-                                    <th className="px-6 py-4 font-semibold text-right">Added</th>
-                                    <th className="px-4 py-4"></th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-cfjj-border/40">
-                                {files.map((file) => (
-                                    <tr key={file.id} className="hover:bg-cfjj-muted/30 transition-colors group cursor-pointer">
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 rounded bg-cfjj-bg text-cfjj-text-secondary group-hover:text-cfjj-blue transition-colors">
-                                                    <FileText className="w-4 h-4" />
-                                                </div>
-                                                <span className="text-sm font-medium text-cfjj-text-primary">
-                                                    {file.name}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {getStatusBadge(file.status)}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className="text-sm font-mono text-cfjj-text-secondary">
-                                                {file.records}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 hidden md:table-cell">
-                                            <span className="text-sm text-cfjj-text-secondary">
-                                                {file.type}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <span className="text-sm text-cfjj-text-secondary">
-                                                {file.date}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-4 text-right">
-                                            <button className="p-1.5 text-cfjj-border group-hover:text-cfjj-text-primary rounded-md hover:bg-cfjj-muted transition-colors opacity-0 group-hover:opacity-100">
-                                                <MoreVertical className="w-4 h-4" />
-                                            </button>
-                                        </td>
+                    <div className="overflow-x-auto flex-1">
+                        {files.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-16 text-cfjj-text-secondary gap-3">
+                                <FileSpreadsheet className="w-8 h-8 opacity-30" />
+                                <p className="text-sm">No files uploaded yet.</p>
+                            </div>
+                        ) : (
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="border-b border-cfjj-border/60 text-xs text-cfjj-text-secondary/80 font-mono tracking-wider bg-cfjj-bg/30">
+                                        <th className="px-6 py-4 font-semibold">File Name</th>
+                                        <th className="px-6 py-4 font-semibold">Status</th>
+                                        <th className="px-6 py-4 font-semibold">Records</th>
+                                        <th className="px-6 py-4 font-semibold hidden md:table-cell">Type</th>
+                                        <th className="px-6 py-4 font-semibold text-right">Added</th>
+                                        <th className="px-4 py-4"></th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-cfjj-border/40">
+                                    {files.map((file) => (
+                                        <tr key={file.id} className="hover:bg-cfjj-muted/30 transition-colors group cursor-pointer">
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="p-2 rounded bg-cfjj-bg text-cfjj-text-secondary group-hover:text-cfjj-blue transition-colors">
+                                                        <FileText className="w-4 h-4" />
+                                                    </div>
+                                                    <span className="text-sm font-medium text-cfjj-text-primary truncate max-w-[180px]">
+                                                        {file.name}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className={getStatusBadge(file.status)}>
+                                                    {getStatusIcon(file.status)}
+                                                    {file.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="text-sm font-mono text-cfjj-text-secondary">
+                                                    {file.records}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 hidden md:table-cell">
+                                                <span className="text-sm text-cfjj-text-secondary">
+                                                    {file.type}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className="text-sm text-cfjj-text-secondary">
+                                                    {file.date}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-4 text-right">
+                                                <button
+                                                    onClick={() => handleRemove(file.id)}
+                                                    className="p-1.5 text-cfjj-border group-hover:text-red-400 rounded-md hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                                                    title="Remove file"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
                     </div>
 
-                    {/* Empty State / Footer if needed */}
                     <div className="p-4 border-t border-cfjj-border/60 bg-cfjj-bg/30 text-center text-xs text-cfjj-text-secondary/80 font-medium">
                         Files are automatically processed upon upload. Review logs for 'Needs Review' items.
                     </div>
