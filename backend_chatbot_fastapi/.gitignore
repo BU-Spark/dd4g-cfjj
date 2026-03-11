@@ -1,0 +1,73 @@
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Streamlit
+.streamlit/
+
+# Data files (don't commit data to git)
+data/*.csv
+data/*.xlsx
+data/*.xls
+data/*.jsonl
+
+# Keep .gitkeep
+!data/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+#Claude
+CLAUDE.md
+
+#Extra documents
+CHATBOT_ARCHITECTURE.md
+FINAL_ARCHITECTURE.md
+PROJECT_STATUS.md
+QUICKSTART.md
+QUOTA_TROUBLESHOOTING.md
+
+# Archive folder (old files before restructuring)
+archive/
+
+# GCP credentials (NEVER commit these!)
+*.json
+service-account*.json
+credentials*.json
+
+
