@@ -1,11 +1,12 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Papa from 'papaparse';
 import {
     UploadCloud, FileSpreadsheet, CheckCircle2,
-    Clock, AlertCircle, RefreshCw,
-    HardDrive, FileText, X
+    RefreshCw, Download, Database, HardDrive, FileText, Loader2, AlertCircle, Lock, X
 } from 'lucide-react';
+import { useAuth, useUser } from '@clerk/react';
 import { cn } from '../lib/utils';
+import { createApiClient } from '../lib/api';
 import { uploadCSV } from '../api/client';
 
 const NARRATIVE_KEYWORDS = ['narrative', 'description', 'summary', 'notes', 'comment', 'text', 'detail'];
@@ -30,37 +31,85 @@ function previewCSV(file) {
                 resolve({
                     rowCount: results.data.length,
                     detectedType: detectType(results.meta.fields || []),
-                })
+                });
             },
             error: reject,
-        })
-    })
+        });
+    });
 }
 
+function formatSize(bytes) {
+    if (!bytes) return '—';
+    if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} MB`;
+    return `${Math.round(bytes / 1024)} KB`;
+}
+
+function formatDate(isoString) {
+    if (!isoString) return '—';
+    return new Date(isoString).toLocaleDateString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric',
+    });
+}
+
+const getStatusBadge = (status) => {
+    const base = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border";
+    switch (status) {
+        case 'Ready': return cn(base, "bg-emerald-50 text-emerald-700 border-emerald-200");
+        case 'Processing': return cn(base, "bg-blue-50 text-cfjj-blue border-blue-200");
+        case 'Needs Review': return cn(base, "bg-amber-50 text-amber-700 border-amber-200");
+        case 'Failed': return cn(base, "bg-red-50 text-red-700 border-red-200");
+        default: return cn(base, "bg-gray-50 text-gray-700 border-gray-200");
+    }
+};
+
+const getStatusIcon = (status) => {
+    switch (status) {
+        case 'Ready': return <CheckCircle2 className="w-3.5 h-3.5" />;
+        case 'Processing': return <RefreshCw className="w-3.5 h-3.5 animate-spin" />;
+        case 'Failed': return <AlertCircle className="w-3.5 h-3.5" />;
+        default: return null;
+    }
+};
+
 export default function KnowledgeBase() {
+    const { getToken } = useAuth();
+    const { user } = useUser();
+    const isAdmin = user?.publicMetadata?.role === 'admin';
+    const api = useCallback(() => createApiClient(getToken), [getToken])();
+
     const [isDragging, setIsDragging] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [uploadError, setUploadError] = useState(null);
-    const [files, setFiles] = useState([]);
+    const [ragFiles, setRagFiles] = useState([]);
+    const [uploadedFiles, setUploadedFiles] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [downloading, setDownloading] = useState(null);
     const fileInputRef = useRef(null);
 
+    useEffect(() => {
+        api.listRagFiles()
+            .then(setRagFiles)
+            .catch((err) => setError(err.message))
+            .finally(() => setLoading(false));
+    }, []);
+
     const validateFile = (file) => {
-        if (!file.name.endsWith('.csv')) return 'Only CSV files are accepted.'
-        if (file.size > 50 * 1024 * 1024) return 'File exceeds 50MB limit.'
-        return null
-    }
+        if (!file.name.endsWith('.csv')) return 'Only CSV files are accepted.';
+        if (file.size > 50 * 1024 * 1024) return 'File exceeds 50MB limit.';
+        return null;
+    };
 
     const handleFile = async (file) => {
-        if (!file) return
-        setUploadError(null)
+        if (!file) return;
+        setUploadError(null);
 
-        const error = validateFile(file)
-        if (error) { setUploadError(error); return }
+        const err = validateFile(file);
+        if (err) { setUploadError(err); return; }
 
-        // Pass 1 — browser preview (instant)
-        let preview = { rowCount: '—', detectedType: 'Unknown' }
+        let preview = { rowCount: '—', detectedType: 'Unknown' };
         try {
-            preview = await previewCSV(file)
+            preview = await previewCSV(file);
         } catch {
             // non-blocking, fall back to defaults
         }
@@ -72,72 +121,64 @@ export default function KnowledgeBase() {
             status: 'Processing',
             records: preview.rowCount !== '—' ? preview.rowCount.toLocaleString() : '—',
             type: preview.detectedType,
-        }
-        setFiles(f => [newEntry, ...f])
-        setUploading(true)
+        };
+        setUploadedFiles(f => [newEntry, ...f]);
+        setUploading(true);
 
         try {
-            // Pass 2 — backend returns accurate post-dedup count
-            const res = await uploadCSV(file)
-            setFiles(f => f.map(entry =>
+            const res = await uploadCSV(file);
+            setUploadedFiles(f => f.map(entry =>
                 entry.id === newEntry.id
-                    ? {
-                        ...entry,
-                        status: 'Ready',
-                        records: res.added.toLocaleString(),
-                        type: res.type ?? entry.type,
-                    }
+                    ? { ...entry, status: 'Ready', records: res.added.toLocaleString(), type: res.type ?? entry.type }
                     : entry
-            ))
-        } catch (e) {
-            setFiles(f => f.map(entry =>
-                entry.id === newEntry.id
-                    ? { ...entry, status: 'Failed' }
-                    : entry
-            ))
-            setUploadError('Upload failed. Please try again.')
+            ));
+        } catch {
+            setUploadedFiles(f => f.map(entry =>
+                entry.id === newEntry.id ? { ...entry, status: 'Failed' } : entry
+            ));
+            setUploadError('Upload failed. Please try again.');
         } finally {
-            setUploading(false)
+            setUploading(false);
         }
-    }
+    };
 
     const handleDrop = (e) => {
-        e.preventDefault()
-        setIsDragging(false)
-        handleFile(e.dataTransfer.files[0])
-    }
+        e.preventDefault();
+        setIsDragging(false);
+        handleFile(e.dataTransfer.files[0]);
+    };
 
     const handleInputChange = (e) => {
-        handleFile(e.target.files[0])
-        e.target.value = ''
-    }
+        handleFile(e.target.files[0]);
+        e.target.value = '';
+    };
 
-    const handleRemove = (id) => setFiles(f => f.filter(entry => entry.id !== id))
+    const handleRemove = (id) => setUploadedFiles(f => f.filter(entry => entry.id !== id));
 
-    const getStatusIcon = (status) => {
-        switch (status) {
-            case 'Ready': return <CheckCircle2 className="w-4 h-4 text-emerald-600" />;
-            case 'Processing': return <RefreshCw className="w-4 h-4 text-cfjj-blue animate-spin" />;
-            case 'Needs Review': return <AlertCircle className="w-4 h-4 text-amber-500" />;
-            case 'Failed': return <AlertCircle className="w-4 h-4 text-red-500" />;
-            default: return <Clock className="w-4 h-4 text-cfjj-text-secondary" />;
+    async function handleDownload(file) {
+        if (!file.gcsUri || downloading) return;
+        setDownloading(file.name);
+        try {
+            const blob = await api.downloadRagFile(file.gcsUri);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = file.displayName;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Download failed:', err);
+        } finally {
+            setDownloading(null);
         }
     }
 
-    const getStatusBadge = (status) => {
-        const base = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border";
-        switch (status) {
-            case 'Ready': return cn(base, "bg-emerald-50 text-emerald-700 border-emerald-200");
-            case 'Processing': return cn(base, "bg-blue-50 text-cfjj-blue border-blue-200");
-            case 'Needs Review': return cn(base, "bg-amber-50 text-amber-700 border-amber-200");
-            case 'Failed': return cn(base, "bg-red-50 text-red-700 border-red-200");
-            default: return cn(base, "bg-gray-50 text-gray-700 border-gray-200");
-        }
-    }
+    const totalFiles = ragFiles.length + uploadedFiles.length;
 
     return (
         <div className="flex-1 flex flex-col gap-8 animate-fade-in max-w-6xl mx-auto w-full">
 
+            {/* Header */}
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                 <div className="space-y-1">
                     <h1 className="text-2xl md:text-3xl font-heading font-bold text-cfjj-navy tracking-tight">
@@ -146,6 +187,28 @@ export default function KnowledgeBase() {
                     <p className="text-cfjj-text-secondary">
                         Upload CSV files to refresh the data used for source-backed analysis.
                     </p>
+                </div>
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-cfjj-border/60 shadow-sm">
+                        <Database className="w-4 h-4 text-cfjj-blue" />
+                        <span className="text-sm font-medium text-cfjj-navy">
+                            {loading ? '...' : `${totalFiles} Files`}
+                        </span>
+                    </div>
+                    <button
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cfjj-muted text-cfjj-navy hover:bg-cfjj-border/50 border border-cfjj-border/60 transition-colors text-sm font-medium"
+                        onClick={() => {
+                            setLoading(true);
+                            setError(null);
+                            api.listRagFiles()
+                                .then(setRagFiles)
+                                .catch((err) => setError(err.message))
+                                .finally(() => setLoading(false));
+                        }}
+                    >
+                        <RefreshCw className="w-4 h-4" />
+                        Sync Status
+                    </button>
                 </div>
             </div>
 
@@ -164,47 +227,60 @@ export default function KnowledgeBase() {
                 {/* Left Column */}
                 <div className="lg:col-span-1 space-y-6">
 
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".csv"
-                        className="hidden"
-                        onChange={handleInputChange}
-                    />
-
-                    <div
-                        className={cn(
-                            "relative group rounded-2xl border-2 border-dashed p-8 text-center transition-all bg-white flex flex-col items-center justify-center min-h-[240px]",
-                            isDragging ? "border-cfjj-blue bg-cfjj-muted/50 scale-[1.02]" : "border-cfjj-border/80 hover:border-cfjj-navy/40 hover:bg-cfjj-muted/20",
-                            uploading && "pointer-events-none opacity-60"
-                        )}
-                        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                        onDragLeave={() => setIsDragging(false)}
-                        onDrop={handleDrop}
-                    >
-                        <div className={cn(
-                            "w-14 h-14 bg-cfjj-muted rounded-full flex items-center justify-center mb-4 text-cfjj-blue transition-transform duration-300",
-                            !uploading && "group-hover:scale-110"
-                        )}>
-                            {uploading ? <RefreshCw className="w-7 h-7 animate-spin" /> : <UploadCloud className="w-7 h-7" />}
+                    {isAdmin ? (
+                        <>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".csv"
+                                className="hidden"
+                                onChange={handleInputChange}
+                            />
+                            <div
+                                className={cn(
+                                    "relative group rounded-2xl border-2 border-dashed p-8 text-center transition-all bg-white flex flex-col items-center justify-center min-h-[240px]",
+                                    isDragging ? "border-cfjj-blue bg-cfjj-muted/50 scale-[1.02]" : "border-cfjj-border/80 hover:border-cfjj-navy/40 hover:bg-cfjj-muted/20",
+                                    uploading && "pointer-events-none opacity-60"
+                                )}
+                                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                                onDragLeave={() => setIsDragging(false)}
+                                onDrop={handleDrop}
+                            >
+                                <div className={cn(
+                                    "w-14 h-14 bg-cfjj-muted rounded-full flex items-center justify-center mb-4 text-cfjj-blue transition-transform duration-300",
+                                    !uploading && "group-hover:scale-110"
+                                )}>
+                                    {uploading ? <RefreshCw className="w-7 h-7 animate-spin" /> : <UploadCloud className="w-7 h-7" />}
+                                </div>
+                                <h3 className="text-base font-semibold text-cfjj-navy mb-1.5">
+                                    {uploading ? 'Uploading...' : 'Upload Sources'}
+                                </h3>
+                                <p className="text-sm text-cfjj-text-secondary mb-6 max-w-[200px]">
+                                    {uploading ? 'Processing your file, please wait.' : 'Drop CSV files here or browse to upload new source data'}
+                                </p>
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={uploading}
+                                    className="px-5 py-2.5 rounded-xl bg-cfjj-navy text-white text-sm font-medium hover:bg-cfjj-deep-blue transition-colors shadow-sm w-full mx-auto max-w-[200px] disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {uploading ? 'Uploading...' : 'Select Files'}
+                                </button>
+                                <p className="text-xs text-cfjj-text-secondary/70 mt-4 font-mono">
+                                    CSV only, up to 50MB per file
+                                </p>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="rounded-2xl border-2 border-dashed border-cfjj-border/60 p-8 text-center bg-white flex flex-col items-center justify-center min-h-[240px]">
+                            <div className="w-14 h-14 bg-cfjj-muted rounded-full flex items-center justify-center mb-4 text-cfjj-text-secondary">
+                                <Lock className="w-6 h-6" />
+                            </div>
+                            <h3 className="text-base font-semibold text-cfjj-navy mb-1.5">View Only</h3>
+                            <p className="text-sm text-cfjj-text-secondary max-w-[200px]">
+                                Only admins can upload new source files.
+                            </p>
                         </div>
-                        <h3 className="text-base font-semibold text-cfjj-navy mb-1.5">
-                            {uploading ? 'Uploading...' : 'Upload Sources'}
-                        </h3>
-                        <p className="text-sm text-cfjj-text-secondary mb-6 max-w-[200px]">
-                            {uploading ? 'Processing your file, please wait.' : 'Drop CSV files here or browse to upload new source data'}
-                        </p>
-                        <button
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={uploading}
-                            className="px-5 py-2.5 rounded-xl bg-cfjj-navy text-white text-sm font-medium hover:bg-cfjj-deep-blue transition-colors shadow-sm w-full mx-auto max-w-[200px] disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {uploading ? 'Uploading...' : 'Select Files'}
-                        </button>
-                        <p className="text-xs text-cfjj-text-secondary/70 mt-4 font-mono">
-                            CSV only, up to 50MB per file
-                        </p>
-                    </div>
+                    )}
 
                     <div className="bg-white rounded-2xl border border-cfjj-border/60 p-5 space-y-4 shadow-sm">
                         <h3 className="font-heading font-semibold text-cfjj-navy text-sm flex items-center gap-2 pb-2 border-b border-cfjj-border/40">
@@ -244,30 +320,89 @@ export default function KnowledgeBase() {
                             Data Library
                         </h2>
                         <div className="text-xs font-medium text-cfjj-text-secondary bg-white px-3 py-1.5 rounded-md border border-cfjj-border/60">
-                            {files.length} {files.length === 1 ? 'File' : 'Files'} Uploaded
+                            {loading ? '...' : `${totalFiles} ${totalFiles === 1 ? 'File' : 'Files'}`}
                         </div>
                     </div>
 
-                    <div className="overflow-x-auto flex-1">
-                        {files.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-16 text-cfjj-text-secondary gap-3">
-                                <FileSpreadsheet className="w-8 h-8 opacity-30" />
-                                <p className="text-sm">No files uploaded yet.</p>
-                            </div>
-                        ) : (
+                    {loading ? (
+                        <div className="flex-1 flex items-center justify-center py-20 text-cfjj-text-secondary">
+                            <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                            <span className="text-sm">Loading files…</span>
+                        </div>
+                    ) : error ? (
+                        <div className="flex-1 flex items-center justify-center py-20 text-red-600 gap-2">
+                            <AlertCircle className="w-5 h-5" />
+                            <span className="text-sm">{error}</span>
+                        </div>
+                    ) : totalFiles === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-16 text-cfjj-text-secondary gap-3">
+                            <FileSpreadsheet className="w-8 h-8 opacity-30" />
+                            <p className="text-sm">No files uploaded yet.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto flex-1">
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="border-b border-cfjj-border/60 text-xs text-cfjj-text-secondary/80 font-mono tracking-wider bg-cfjj-bg/30">
                                         <th className="px-6 py-4 font-semibold">File Name</th>
-                                        <th className="px-6 py-4 font-semibold">Status</th>
-                                        <th className="px-6 py-4 font-semibold">Records</th>
-                                        <th className="px-6 py-4 font-semibold hidden md:table-cell">Type</th>
+                                        <th className="px-6 py4 font-semibold">Status</th>
+                                        <th className="px-6 py-4 font-semibold hidden md:table-cell">Size / Records</th>
                                         <th className="px-6 py-4 font-semibold text-right">Added</th>
                                         <th className="px-4 py-4"></th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-cfjj-border/40">
-                                    {files.map((file) => (
+                                    {/* RAG corpus files */}
+                                    {ragFiles.map((file) => (
+                                        <tr key={file.name} className="hover:bg-cfjj-muted/30 transition-colors group cursor-pointer">
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="p-2 rounded bg-cfjj-bg text-cfjj-text-secondary group-hover:text-cfjj-blue transition-colors">
+                                                        <FileText className="w-4 h-4" />
+                                                    </div>
+                                                    <span className="text-sm font-medium text-cfjj-text-primary truncate max-w-[180px]">
+                                                        {file.displayName}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className={getStatusBadge('Ready')}>
+                                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                                    Ready
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 hidden md:table-cell">
+                                                <span className="text-sm font-mono text-cfjj-text-secondary">
+                                                    {formatSize(file.sizeBytes)}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className="text-sm text-cfjj-text-secondary">
+                                                    {formatDate(file.createTime)}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-4 text-right">
+                                                <button
+                                                    title={file.gcsUri ? 'Download file' : 'No source file available'}
+                                                    disabled={!file.gcsUri || downloading === file.name}
+                                                    onClick={() => handleDownload(file)}
+                                                    className={cn(
+                                                        "p-1.5 rounded-md transition-colors opacity-0 group-hover:opacity-100",
+                                                        file.gcsUri
+                                                            ? "text-cfjj-text-secondary hover:text-cfjj-navy hover:bg-cfjj-muted"
+                                                            : "text-cfjj-border cursor-not-allowed"
+                                                    )}
+                                                >
+                                                    {downloading === file.name
+                                                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                                                        : <Download className="w-4 h-4" />
+                                                    }
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {/* Locally uploaded files */}
+                                    {uploadedFiles.map((file) => (
                                         <tr key={file.id} className="hover:bg-cfjj-muted/30 transition-colors group cursor-pointer">
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
@@ -285,14 +420,9 @@ export default function KnowledgeBase() {
                                                     {file.status}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4">
-                                                <span className="text-sm font-mono text-cfjj-text-secondary">
-                                                    {file.records}
-                                                </span>
-                                            </td>
                                             <td className="px-6 py-4 hidden md:table-cell">
-                                                <span className="text-sm text-cfjj-text-secondary">
-                                                    {file.type}
+                                                <span className="text-sm font-mono text-cfjj-text-secondary">
+                                                    {file.records} rows
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 text-right">
@@ -313,8 +443,8 @@ export default function KnowledgeBase() {
                                     ))}
                                 </tbody>
                             </table>
-                        )}
-                    </div>
+                        </div>
+                    )}
 
                     <div className="p-4 border-t border-cfjj-border/60 bg-cfjj-bg/30 text-center text-xs text-cfjj-text-secondary/80 font-medium">
                         Files are automatically processed upon upload. Review logs for 'Needs Review' items.

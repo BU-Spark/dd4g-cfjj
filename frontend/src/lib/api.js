@@ -30,5 +30,16 @@ export function createApiClient(getToken) {
             body: JSON.stringify({ role, content }),
         }),
         deleteChat: (id) => authFetch(`/api/chats/${id}`, { method: 'DELETE' }),
+
+        listRagFiles: () => authFetch('/api/rag/files'),
+
+        downloadRagFile: async (gcsUri) => {
+            const token = await getToken();
+            const res = await fetch(`${API_URL}/api/rag/files/download?uri=${encodeURIComponent(gcsUri)}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+            return res.blob();
+        },
     };
 }
