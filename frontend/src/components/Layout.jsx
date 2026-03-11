@@ -1,0 +1,75 @@
+import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Database, CheckCircle2, Shield } from 'lucide-react';
+import { cn } from '../lib/utils';
+
+export default function Layout() {
+    const location = useLocation();
+
+    const navLinks = [
+        { name: 'Chat', path: '/' },
+        { name: 'Knowledge Base', path: '/knowledge' },
+    ];
+
+    return (
+        <div className="min-h-screen flex flex-col bg-cfjj-bg">
+            <header className="sticky top-0 w-full h-16 bg-white/90 backdrop-blur-md border-b border-cfjj-border z-50 flex-none">
+                <div className="h-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+
+                    {/* Left: Logo and Nav */}
+                    <div className="flex items-center h-full gap-8">
+                        <Link to="/" className="flex items-center gap-3 active:scale-95 transition-transform">
+                            <div className="flex items-center justify-center w-8 h-8 rounded bg-cfjj-navy text-white shadow-sm">
+                                <Shield className="w-4 h-4" />
+                            </div>
+                            <span className="font-heading font-bold text-cfjj-navy text-xl tracking-tight leading-none pt-1">CFJJ</span>
+                        </Link>
+
+                        <nav className="hidden md:flex items-center h-full gap-6">
+                            {navLinks.map((link) => {
+                                const isActive = location.pathname === link.path;
+                                return (
+                                    <Link
+                                        key={link.path}
+                                        to={link.path}
+                                        className={cn(
+                                            "text-sm font-medium h-full flex items-center border-b-2 transition-colors",
+                                            isActive
+                                                ? "text-cfjj-navy border-cfjj-navy"
+                                                : "text-cfjj-text-secondary border-transparent hover:text-cfjj-navy"
+                                        )}
+                                    >
+                                        {link.name}
+                                    </Link>
+                                );
+                            })}
+                        </nav>
+                    </div>
+
+                    {/* Right: Status / Internal Label */}
+                    <div className="flex items-center gap-4">
+                        <div className="hidden lg:flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-cfjj-muted text-cfjj-text-secondary text-xs font-medium border border-cfjj-border/60">
+                            <Database className="w-3.5 h-3.5" />
+                            <span>Internal Workspace</span>
+                        </div>
+
+                        <div className="flex flex-col items-end">
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Data Ready
+                            </div>
+                            <span className="text-[10px] font-mono text-cfjj-text-secondary uppercase tracking-wider mt-0.5">
+                                Last Sync: Just now
+                            </span>
+                        </div>
+                    </div>
+
+                </div>
+            </header>
+
+            {/* Main Content */}
+            <main className="flex-1 flex flex-col w-full max-w-7xl mx-auto h-[calc(100vh-4rem)] p-4 sm:p-6 lg:p-8">
+                <Outlet />
+            </main>
+        </div>
+    );
+}
