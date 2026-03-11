@@ -6,6 +6,8 @@ import streamlit as st
 from ...config.settings import settings
 from ...services.ingestion_service import IngestionService
 from ...utils.exceptions import IngestionError, ValidationError
+from ..factory import get_ingestion_service
+
 
 
 def render_ingestion_page():
@@ -52,8 +54,8 @@ def render_ingestion_page():
             else:
                 with st.spinner("Processing file..."):
                     try:
-                        # Initialize ingestion service
-                        ingestion_service = IngestionService()
+                        # Get cached ingestion service (singleton across reruns)
+                        ingestion_service = get_ingestion_service()
 
                         # Progress tracking
                         progress_bar = st.progress(0, text="Starting...")

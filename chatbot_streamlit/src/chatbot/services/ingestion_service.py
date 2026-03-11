@@ -47,7 +47,10 @@ class IngestionService:
 
         # Initialize Vertex AI
         try:
-            aiplatform.init(project=self.project_id, location=self.location)
+            aiplatform.init(
+                project=self.project_id,
+                location=self.location
+            )
             logger.info(f"Initialized Vertex AI for project: {self.project_id}, location: {self.location}")
         except Exception as e:
             raise IngestionError(f"Failed to initialize Vertex AI: {str(e)}")

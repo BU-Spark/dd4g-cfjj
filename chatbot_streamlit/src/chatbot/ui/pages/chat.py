@@ -7,6 +7,8 @@ from ...config.settings import settings
 from ...services.rag_service import RAGService
 from ...utils.exceptions import RAGError
 from ..components.sources import render_sources
+from ..factory import get_rag_service
+
 
 
 def render_chat_page():
@@ -64,9 +66,7 @@ def render_chat_page():
 
     # Handle ask button
     if ask_button and question:
-        if not data_loaded:
-            st.error("❌ No data loaded. Please upload complaint data in the **Data Ingestion** tab first.")
-        elif not settings.gcp_project_id:
+        if not settings.gcp_project_id:
             st.error("❌ GCP_PROJECT_ID environment variable not set. Please configure your environment.")
         else:
             with st.spinner("🔎 Analyzing complaints..."):
@@ -77,8 +77,8 @@ def render_chat_page():
                     if not corpus_name:
                         st.error("❌ RAG corpus not found. Please re-upload your data.")
                     else:
-                        # Initialize RAG service
-                        rag_service = RAGService()
+                        # Get cached RAG service (singleton across reruns)
+                        rag_service = get_rag_service()
 
                         # Query the RAG corpus
                         result = rag_service.query(corpus_name, question)

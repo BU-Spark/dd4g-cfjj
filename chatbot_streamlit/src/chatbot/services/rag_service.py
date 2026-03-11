@@ -3,7 +3,7 @@ RAG Service Module for SRO Complaints Chatbot
 Handles querying using Vertex AI RAG and Gemini
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from google.cloud import aiplatform
 from vertexai.preview import rag
 import google.generativeai as genai
@@ -38,14 +38,17 @@ class RAGService:
         self.model_name = model_name or settings.gemini_model
 
         try:
-            # Initialize Vertex AI
-            aiplatform.init(project=self.project_id, location=self.location)
-            logger.info(f"Initialized Vertex AI for project: {self.project_id}, location: {self.location}")
-
             # Initialize Gemini with API key
             api_key = settings.google_api_key
             if not api_key:
                 raise RAGError("GOOGLE_API_KEY not set. Please configure your .env file.")
+
+            # Initialize Vertex AI
+            aiplatform.init(
+                project=self.project_id,
+                location=self.location
+            )
+            logger.info(f"Initialized Vertex AI for project: {self.project_id}, location: {self.location}")
 
             genai.configure(api_key=api_key)
             self.llm = genai.GenerativeModel(self.model_name)
@@ -95,10 +98,15 @@ class RAGService:
 
             if hasattr(response, 'contexts') and response.contexts:
                 for i, context in enumerate(response.contexts.contexts[:top_k]):
+                    # Debug log the raw content
+                    text = context.text if hasattr(context, 'text') else str(context)
+                    score = context.distance if hasattr(context, 'distance') else 0.0
+                    logger.info(f"Retrieved Doc {i+1} [Score: {score:.4f}]: {text[:500]}...")
+                    
                     doc = {
-                        'content': context.text if hasattr(context, 'text') else str(context),
+                        'content': text,
                         'source': context.source_uri if hasattr(context, 'source_uri') else 'Unknown',
-                        'similarity_score': context.distance if hasattr(context, 'distance') else 0.0,
+                        'similarity_score': score,
                         'rank': i + 1
                     }
                     relevant_docs.append(doc)
@@ -278,3 +286,32 @@ Answer:"""
             raise
         except Exception as e:
             raise RAGError(f"Unexpected error during RAG query: {str(e)}")
+
+    def discover_corpus(self, display_name: str = None) -> Optional[str]:
+        """
+        Search for an existing RAG corpus by display name.
+
+        Args:
+            display_name: The display name to search for (uses settings if None)
+
+        Returns:
+            Optional[str]: The full resource name of the corpus if found, else None
+        """
+        # 1. Check if a specific corpus ID is provided in settings/env
+        if hasattr(settings, 'rag_corpus_id') and settings.rag_corpus_id:
+            logger.info(f"Using manually configured RAG corpus ID: {settings.rag_corpus_id}")
+            return settings.rag_corpus_id
+
+        # 2. Otherwise discovery by display name
+        target_name = display_name or settings.corpus_display_name
+        try:
+            logger.info(f"Searching for existing corpus with display name: {target_name}")
+            corpora = rag.list_corpora()
+            for c in corpora:
+                if c.display_name == target_name:
+                    logger.info(f"Auto-discovered corpus: {c.name}")
+                    return c.name
+            return None
+        except Exception as e:
+            logger.error(f"Error discovering corpus: {str(e)}")
+            return None

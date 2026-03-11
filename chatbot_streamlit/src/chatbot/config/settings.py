@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     # Google AI Configuration
     google_api_key: str
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-2.0-flash"
 
     # Vertex AI Configuration
     vertex_ai_location: str = "us-east5"  # For RAG operations
@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     chunk_size: int = 512
     chunk_overlap: int = 100
     similarity_top_k: int = 5
+    rag_corpus_id: Optional[str] = None
 
     # Data Processing Configuration
     max_narrative_length: int = 2000

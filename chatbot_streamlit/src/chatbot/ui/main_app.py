@@ -7,6 +7,7 @@ import streamlit as st
 from .components.sidebar import render_sidebar
 from .pages.chat import render_chat_page
 from .pages.ingestion import render_ingestion_page
+from .factory import get_rag_service, get_ingestion_service
 
 
 # Page configuration
@@ -39,12 +40,30 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+
 def main():
     """Main application entry point"""
 
     # Render sidebar
     with st.sidebar:
         render_sidebar()
+
+    # Auto-initialize corpus if not already set
+    if 'corpus_ready' not in st.session_state:
+        st.session_state.corpus_ready = False
+
+    if not st.session_state.get('corpus_ready', False):
+        with st.spinner("Checking for existing knowledge base..."):
+            try:
+                rag_service = get_rag_service()
+                corpus_name = rag_service.discover_corpus()
+                if corpus_name:
+                    st.session_state.corpus_ready = True
+                    st.session_state.corpus_name = corpus_name
+                    # We don't have total_complaints count yet, but it's optional for the UI
+            except Exception:
+                # Silently fail auto-discovery, user can still manual upload
+                pass
 
     # Main title
     st.markdown('<p class="main-header">SRO Complaints Chatbot</p>', unsafe_allow_html=True)
