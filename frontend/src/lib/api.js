@@ -41,5 +41,23 @@ export function createApiClient(getToken) {
             if (!res.ok) throw new Error(`Download failed: ${res.status}`);
             return res.blob();
         },
+
+        queryMessage: (message, history) => authFetch('/api/query', {
+            method: 'POST',
+            body: JSON.stringify({ message, history }),
+        }),
+
+        uploadRagFile: async (file) => {
+            const token = await getToken();
+            const form = new FormData();
+            form.append('file', file);
+            const res = await fetch(`${API_URL}/api/rag/files/upload`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+                body: form,
+            });
+            if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+            return res.json();
+        },
     };
 }

@@ -1,6 +1,9 @@
 const express = require('express');
 const { requireAuth } = require('@clerk/express');
 const { GoogleAuth } = require('google-auth-library');
+const multer = require('multer');
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 const router = express.Router();
 
@@ -102,9 +105,46 @@ router.get('/files/download', async (req, res) => {
 });
 
 // POST /api/rag/files/upload — admin only
-router.post('/files/upload', requireAdmin, async (req, res) => {
-    // TODO: implement file upload to Vertex AI RAG corpus
-    res.status(501).json({ error: 'Not implemented yet' });
+router.post('/files/upload', requireAdmin, upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+        const { LOCATION, RAG_CORPUS_ID } = process.env;
+        const token = await getAccessToken();
+
+        const boundary = `----FormBoundary${Date.now()}`;
+        const metadata = JSON.stringify({ display_name: req.file.originalname });
+
+        const body = Buffer.concat([
+            Buffer.from(`--${boundary}\r\nContent-Type: application/json\r\n\r\n${metadata}\r\n`),
+            Buffer.from(`--${boundary}\r\nContent-Type: text/csv\r\n\r\n`),
+            req.file.buffer,
+            Buffer.from(`\r\n--${boundary}--`),
+        ]);
+
+        const url = `https://${LOCATION}-aiplatform.googleapis.com/upload/v1beta1/${RAG_CORPUS_ID}/ragFiles:upload?uploadType=multipart`;
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': `multipart/related; boundary=${boundary}`,
+                'Content-Length': String(body.length),
+            },
+            body,
+        });
+
+        if (!response.ok) {
+            const err = await response.text();
+            return res.status(response.status).json({ error: `Vertex AI error: ${err}` });
+        }
+
+        const ragFile = await response.json();
+        res.json({ success: true, file: ragFile });
+    } catch (err) {
+        console.error('RAG upload error:', err);
+        res.status(500).json({ error: 'Failed to upload file' });
+    }
 });
 
 module.exports = router;

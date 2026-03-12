@@ -95,9 +95,9 @@ export default function Chat() {
                 await api.appendMessage(chatId, 'user', text);
             }
 
-            const placeholder = { role: 'assistant', content: 'Analysis coming soon...' };
-            await api.appendMessage(chatId, 'assistant', placeholder.content);
-            setMessages(prev => [...prev, placeholder]);
+            const { answer } = await api.queryMessage(text, messages);
+            await api.appendMessage(chatId, 'assistant', answer);
+            setMessages(prev => [...prev, { role: 'assistant', content: answer }]);
 
         } catch (err) {
             console.error('Send failed:', err);

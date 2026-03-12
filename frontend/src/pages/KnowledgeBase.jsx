@@ -7,7 +7,6 @@ import {
 import { useAuth, useUser } from '@clerk/react';
 import { cn } from '../lib/utils';
 import { createApiClient } from '../lib/api';
-import { uploadCSV } from '../api/client';
 
 const NARRATIVE_KEYWORDS = ['narrative', 'description', 'summary', 'notes', 'comment', 'text', 'detail'];
 const STRUCTURED_KEYWORDS = ['id', 'date', 'code', 'status', 'type', 'number', 'count', 'flag'];
@@ -126,10 +125,10 @@ export default function KnowledgeBase() {
         setUploading(true);
 
         try {
-            const res = await uploadCSV(file);
+            await api.uploadRagFile(file);
             setUploadedFiles(f => f.map(entry =>
                 entry.id === newEntry.id
-                    ? { ...entry, status: 'Ready', records: res.added.toLocaleString(), type: res.type ?? entry.type }
+                    ? { ...entry, status: 'Ready' }
                     : entry
             ));
         } catch {
