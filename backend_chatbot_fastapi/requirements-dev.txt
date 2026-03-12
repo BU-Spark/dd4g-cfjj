@@ -1,0 +1,17 @@
+# Development dependencies for SRO Complaints Chatbot
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.1
+
+# Code formatting and linting
+black>=23.7.0
+ruff>=0.0.280
+mypy>=1.4.1
+
+# Type stubs
+types-requests>=2.31.0
+
+# Include production dependencies
+-r requirements.txt
