@@ -15,6 +15,7 @@ from ..models.schemas import ComplaintRecord, ComplaintMetadata, ProcessingResul
 from ..utils.logger import setup_logger
 from ..utils.validators import validate_file_type, validate_complaint_data
 from ..utils.exceptions import IngestionError, ValidationError
+from ..utils.gcp_auth import get_gcp_credentials
 from .gcs_service import GCSService
 
 logger = setup_logger(__name__)
@@ -47,7 +48,11 @@ class IngestionService:
 
         # Initialize Vertex AI
         try:
-            aiplatform.init(project=self.project_id, location=self.location)
+            credentials = get_gcp_credentials()
+            if credentials:
+                aiplatform.init(project=self.project_id, location=self.location, credentials=credentials)
+            else:
+                aiplatform.init(project=self.project_id, location=self.location)
             logger.info(f"Initialized Vertex AI for project: {self.project_id}, location: {self.location}")
         except Exception as e:
             raise IngestionError(f"Failed to initialize Vertex AI: {str(e)}")

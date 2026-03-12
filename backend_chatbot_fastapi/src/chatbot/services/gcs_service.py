@@ -10,6 +10,7 @@ from google.cloud import storage
 from ..config.settings import settings
 from ..utils.logger import setup_logger
 from ..utils.exceptions import GCSError
+from ..utils.gcp_auth import get_gcp_credentials
 
 logger = setup_logger(__name__)
 
@@ -29,7 +30,11 @@ class GCSService:
         self.bucket_name = bucket_name or settings.gcs_bucket_name
 
         try:
-            self.client = storage.Client(project=self.project_id)
+            credentials = get_gcp_credentials()
+            if credentials:
+                self.client = storage.Client(project=self.project_id, credentials=credentials)
+            else:
+                self.client = storage.Client(project=self.project_id)
             logger.info(f"Initialized GCS client for project: {self.project_id}")
         except Exception as e:
             raise GCSError(f"Failed to initialize GCS client: {str(e)}")

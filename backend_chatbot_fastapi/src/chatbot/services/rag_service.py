@@ -12,6 +12,7 @@ from ..config.settings import settings
 from ..models.schemas import RAGQueryResponse, Source
 from ..utils.logger import setup_logger
 from ..utils.exceptions import RAGError
+from ..utils.gcp_auth import get_gcp_credentials
 
 logger = setup_logger(__name__)
 
@@ -39,7 +40,11 @@ class RAGService:
 
         try:
             # Initialize Vertex AI
-            aiplatform.init(project=self.project_id, location=self.location)
+            credentials = get_gcp_credentials()
+            if credentials:
+                aiplatform.init(project=self.project_id, location=self.location, credentials=credentials)
+            else:
+                aiplatform.init(project=self.project_id, location=self.location)
             logger.info(f"Initialized Vertex AI for project: {self.project_id}, location: {self.location}")
 
             # Initialize Gemini with API key
