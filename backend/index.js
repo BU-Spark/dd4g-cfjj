@@ -4,7 +4,6 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const { clerkMiddleware } = require('@clerk/express');
 const chatsRouter = require('./routes/chats');
-const ragRouter = require('./routes/rag');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -14,7 +13,6 @@ app.use(express.json());
 app.use(clerkMiddleware());
 
 app.use('/api/chats', chatsRouter);
-app.use('/api/rag', ragRouter);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 

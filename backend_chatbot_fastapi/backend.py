@@ -180,6 +180,59 @@ async def corpus_status():
         }
 
 
+@app.get("/corpus/files")
+async def list_corpus_files():
+    """
+    List all files in the RAG corpus
+
+    Returns a list of files that have been ingested into the corpus
+    """
+    try:
+        from vertexai.preview import rag
+
+        # Get corpus name from cache or list corpora
+        corpus_name = corpus_cache.get("default_corpus_name")
+
+        if not corpus_name:
+            logger.info("Listing corpora to find files...")
+            corpora = list(rag.list_corpora())
+            if not corpora:
+                return {
+                    "files": [],
+                    "total": 0,
+                    "message": "No corpus found. Please upload data first."
+                }
+            corpus_name = corpora[0].name
+            corpus_cache.set("default_corpus_name", corpus_name)
+
+        # List files in the corpus
+        logger.info(f"Listing files in corpus: {corpus_name}")
+        files = list(rag.list_files(corpus_name=corpus_name))
+
+        file_list = []
+        for file in files:
+            file_list.append({
+                "name": file.name,
+                "display_name": file.display_name or file.name.split('/')[-1],
+                "size_bytes": getattr(file, 'size_bytes', None),
+                "create_time": getattr(file, 'create_time', None),
+            })
+
+        return {
+            "files": file_list,
+            "total": len(file_list),
+            "corpus_name": corpus_name
+        }
+
+    except Exception as e:
+        logger.error(f"Error listing corpus files: {str(e)}")
+        return {
+            "files": [],
+            "total": 0,
+            "error": str(e)
+        }
+
+
 @app.post("/ingest", response_model=IngestionResponse)
 async def ingest_data(file: UploadFile = File(...)):
     """
