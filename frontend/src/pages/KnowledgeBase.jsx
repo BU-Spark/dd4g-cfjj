@@ -6,7 +6,11 @@ import {
 } from 'lucide-react';
 import { useUser } from '@clerk/react';
 import { cn } from '../lib/utils';
+<<<<<<< HEAD
 import { uploadCSV } from '../api/client';
+=======
+import { createApiClient } from '../lib/api';
+>>>>>>> main
 
 const NARRATIVE_KEYWORDS = ['narrative', 'description', 'summary', 'notes', 'comment', 'text', 'detail'];
 const STRUCTURED_KEYWORDS = ['id', 'date', 'code', 'status', 'type', 'number', 'count', 'flag'];
@@ -126,10 +130,14 @@ export default function KnowledgeBase() {
         setUploading(true);
 
         try {
-            const res = await uploadCSV(file);
+            await api.uploadRagFile(file);
             setUploadedFiles(f => f.map(entry =>
                 entry.id === newEntry.id
+<<<<<<< HEAD
                     ? { ...entry, status: 'Ready', records: res.total_complaints?.toLocaleString() ?? entry.records, type: entry.type }
+=======
+                    ? { ...entry, status: 'Ready' }
+>>>>>>> main
                     : entry
             ));
         } catch (err) {
