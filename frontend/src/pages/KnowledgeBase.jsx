@@ -1,12 +1,16 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Papa from 'papaparse';
 import {
     UploadCloud, FileSpreadsheet, CheckCircle2,
-    RefreshCw, Download, Database, HardDrive, FileText, Loader2, AlertCircle, Lock, X
+    RefreshCw, Database, HardDrive, FileText, Loader2, AlertCircle, Lock, X
 } from 'lucide-react';
-import { useAuth, useUser } from '@clerk/react';
+import { useUser } from '@clerk/react';
 import { cn } from '../lib/utils';
+<<<<<<< HEAD
+import { uploadCSV } from '../api/client';
+=======
 import { createApiClient } from '../lib/api';
+>>>>>>> main
 
 const NARRATIVE_KEYWORDS = ['narrative', 'description', 'summary', 'notes', 'comment', 'text', 'detail'];
 const STRUCTURED_KEYWORDS = ['id', 'date', 'code', 'status', 'type', 'number', 'count', 'flag'];
@@ -37,19 +41,6 @@ function previewCSV(file) {
     });
 }
 
-function formatSize(bytes) {
-    if (!bytes) return '—';
-    if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} MB`;
-    return `${Math.round(bytes / 1024)} KB`;
-}
-
-function formatDate(isoString) {
-    if (!isoString) return '—';
-    return new Date(isoString).toLocaleDateString('en-US', {
-        month: 'short', day: 'numeric', year: 'numeric',
-    });
-}
-
 const getStatusBadge = (status) => {
     const base = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border";
     switch (status) {
@@ -71,27 +62,41 @@ const getStatusIcon = (status) => {
 };
 
 export default function KnowledgeBase() {
-    const { getToken } = useAuth();
     const { user } = useUser();
     const isAdmin = user?.publicMetadata?.role === 'admin';
-    const api = useCallback(() => createApiClient(getToken), [getToken])();
 
     const [isDragging, setIsDragging] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [uploadError, setUploadError] = useState(null);
-    const [ragFiles, setRagFiles] = useState([]);
     const [uploadedFiles, setUploadedFiles] = useState([]);
+    const [corpusFiles, setCorpusFiles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [downloading, setDownloading] = useState(null);
     const fileInputRef = useRef(null);
 
+    // Fetch existing corpus files from FastAPI backend
     useEffect(() => {
-        api.listRagFiles()
-            .then(setRagFiles)
-            .catch((err) => setError(err.message))
-            .finally(() => setLoading(false));
+        fetchCorpusFiles();
     }, []);
+
+    const fetchCorpusFiles = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+            const response = await fetch(`${BASE}/corpus/files`);
+            const data = await response.json();
+
+            if (data.files) {
+                setCorpusFiles(data.files);
+            }
+        } catch (err) {
+            console.error('Failed to fetch corpus files:', err);
+            setError('Failed to load files from corpus');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const validateFile = (file) => {
         if (!file.name.endsWith('.csv')) return 'Only CSV files are accepted.';
@@ -128,10 +133,15 @@ export default function KnowledgeBase() {
             await api.uploadRagFile(file);
             setUploadedFiles(f => f.map(entry =>
                 entry.id === newEntry.id
+<<<<<<< HEAD
+                    ? { ...entry, status: 'Ready', records: res.total_complaints?.toLocaleString() ?? entry.records, type: entry.type }
+=======
                     ? { ...entry, status: 'Ready' }
+>>>>>>> main
                     : entry
             ));
-        } catch {
+        } catch (err) {
+            console.error('Upload error:', err);
             setUploadedFiles(f => f.map(entry =>
                 entry.id === newEntry.id ? { ...entry, status: 'Failed' } : entry
             ));
@@ -154,25 +164,7 @@ export default function KnowledgeBase() {
 
     const handleRemove = (id) => setUploadedFiles(f => f.filter(entry => entry.id !== id));
 
-    async function handleDownload(file) {
-        if (!file.gcsUri || downloading) return;
-        setDownloading(file.name);
-        try {
-            const blob = await api.downloadRagFile(file.gcsUri);
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = file.displayName;
-            a.click();
-            URL.revokeObjectURL(url);
-        } catch (err) {
-            console.error('Download failed:', err);
-        } finally {
-            setDownloading(null);
-        }
-    }
-
-    const totalFiles = ragFiles.length + uploadedFiles.length;
+    const totalFiles = corpusFiles.length + uploadedFiles.length;
 
     return (
         <div className="flex-1 flex flex-col gap-8 animate-fade-in max-w-6xl mx-auto w-full">
@@ -191,22 +183,16 @@ export default function KnowledgeBase() {
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-cfjj-border/60 shadow-sm">
                         <Database className="w-4 h-4 text-cfjj-blue" />
                         <span className="text-sm font-medium text-cfjj-navy">
-                            {loading ? '...' : `${totalFiles} Files`}
+                            {totalFiles} Files
                         </span>
                     </div>
                     <button
                         className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cfjj-muted text-cfjj-navy hover:bg-cfjj-border/50 border border-cfjj-border/60 transition-colors text-sm font-medium"
-                        onClick={() => {
-                            setLoading(true);
-                            setError(null);
-                            api.listRagFiles()
-                                .then(setRagFiles)
-                                .catch((err) => setError(err.message))
-                                .finally(() => setLoading(false));
-                        }}
+                        onClick={fetchCorpusFiles}
+                        disabled={loading}
                     >
-                        <RefreshCw className="w-4 h-4" />
-                        Sync Status
+                        <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+                        Refresh
                     </button>
                 </div>
             </div>
@@ -319,24 +305,24 @@ export default function KnowledgeBase() {
                             Data Library
                         </h2>
                         <div className="text-xs font-medium text-cfjj-text-secondary bg-white px-3 py-1.5 rounded-md border border-cfjj-border/60">
-                            {loading ? '...' : `${totalFiles} ${totalFiles === 1 ? 'File' : 'Files'}`}
+                            {totalFiles} {totalFiles === 1 ? 'File' : 'Files'}
                         </div>
                     </div>
 
                     {loading ? (
                         <div className="flex-1 flex items-center justify-center py-20 text-cfjj-text-secondary">
                             <Loader2 className="w-6 h-6 animate-spin mr-2" />
-                            <span className="text-sm">Loading files…</span>
+                            <span className="text-sm">Loading corpus files...</span>
                         </div>
                     ) : error ? (
-                        <div className="flex-1 flex items-center justify-center py-20 text-red-600 gap-2">
+                        <div className="flex-1 flex items-center justify-center py-20 text-amber-600 gap-2">
                             <AlertCircle className="w-5 h-5" />
                             <span className="text-sm">{error}</span>
                         </div>
                     ) : totalFiles === 0 ? (
                         <div className="flex flex-col items-center justify-center py-16 text-cfjj-text-secondary gap-3">
                             <FileSpreadsheet className="w-8 h-8 opacity-30" />
-                            <p className="text-sm">No files uploaded yet.</p>
+                            <p className="text-sm">No files in corpus yet. Upload a CSV to get started.</p>
                         </div>
                     ) : (
                         <div className="overflow-x-auto flex-1">
@@ -351,16 +337,16 @@ export default function KnowledgeBase() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-cfjj-border/40">
-                                    {/* RAG corpus files */}
-                                    {ragFiles.map((file) => (
-                                        <tr key={file.name} className="hover:bg-cfjj-muted/30 transition-colors group cursor-pointer">
+                                    {/* Corpus files (from Vertex AI) */}
+                                    {corpusFiles.map((file) => (
+                                        <tr key={file.name} className="hover:bg-cfjj-muted/30 transition-colors group">
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className="p-2 rounded bg-cfjj-bg text-cfjj-text-secondary group-hover:text-cfjj-blue transition-colors">
                                                         <FileText className="w-4 h-4" />
                                                     </div>
                                                     <span className="text-sm font-medium text-cfjj-text-primary truncate max-w-[180px]">
-                                                        {file.displayName}
+                                                        {file.display_name}
                                                     </span>
                                                 </div>
                                             </td>
@@ -372,35 +358,22 @@ export default function KnowledgeBase() {
                                             </td>
                                             <td className="px-6 py-4 hidden md:table-cell">
                                                 <span className="text-sm font-mono text-cfjj-text-secondary">
-                                                    {formatSize(file.sizeBytes)}
+                                                    {file.size_bytes ? `${(file.size_bytes / 1024).toFixed(0)} KB` : '—'}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <span className="text-sm text-cfjj-text-secondary">
-                                                    {formatDate(file.createTime)}
+                                                    {file.create_time ? new Date(file.create_time).toLocaleDateString('en-US', {
+                                                        month: 'short', day: 'numeric', year: 'numeric'
+                                                    }) : '—'}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-4 text-right">
-                                                <button
-                                                    title={file.gcsUri ? 'Download file' : 'No source file available'}
-                                                    disabled={!file.gcsUri || downloading === file.name}
-                                                    onClick={() => handleDownload(file)}
-                                                    className={cn(
-                                                        "p-1.5 rounded-md transition-colors opacity-0 group-hover:opacity-100",
-                                                        file.gcsUri
-                                                            ? "text-cfjj-text-secondary hover:text-cfjj-navy hover:bg-cfjj-muted"
-                                                            : "text-cfjj-border cursor-not-allowed"
-                                                    )}
-                                                >
-                                                    {downloading === file.name
-                                                        ? <Loader2 className="w-4 h-4 animate-spin" />
-                                                        : <Download className="w-4 h-4" />
-                                                    }
-                                                </button>
+                                                <span className="text-xs text-cfjj-text-secondary/60">In Corpus</span>
                                             </td>
                                         </tr>
                                     ))}
-                                    {/* Locally uploaded files */}
+                                    {/* Recently uploaded files (in this session) */}
                                     {uploadedFiles.map((file) => (
                                         <tr key={file.id} className="hover:bg-cfjj-muted/30 transition-colors group cursor-pointer">
                                             <td className="px-6 py-4">
