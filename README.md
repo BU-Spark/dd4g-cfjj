@@ -1,78 +1,125 @@
+<h1 align="center">                                                                               
+    <br>                                                                                            
+    <a href="https://www.bu.edu/spark/" target="_blank"><img                                        
+  src="https://www.bu.edu/spark/files/2023/08/logo.png" alt="BUSpark" width="200"></a>              
+    <br>                                                                                            
+    SRO Complaints Analysis Platform
+    <br>
+  </h1>
 
-<h1 align="center">
-  <br>
-  <a href="https://www.bu.edu/spark/" target="_blank"><img src="https://www.bu.edu/spark/files/2023/08/logo.png" alt="BUSpark" width="200"></a>
-  <br>
-  Project README Template <change to project name>
-  <br>
-</h1>
+  <h4 align="center">An AI-powered RAG chatbot for analyzing School Resource Officer complaint data
+  for Citizens for Juvenile Justice.</h4>
 
-<h4 align="center">A template for the project readme file. </h4> <change to repo short description>
+  <p align="center">
+    <a href="#key-features">Key Features</a> •
+    <a href="#how-to-use">How To Use</a> •
+    <a href="#project-description">Project Description</a> •
+    <a href="#data-locations">Data Locations</a>
+  </p>
 
-<p align="center">
-  <a href="#key-features">Key Features</a> •
-  <a href="#how-to-use">How To Use</a> •
-  <a href="#project-description">Project Description</a> •
-  <a href="#data-locations">Data Locations</a>
-</p>
+  ## Key Features
 
-## Key Features
-In this section you will be including a list of key features of your code/project.
+  * `/frontend` - React 19 + Vite web application
+    - Chat interface for querying SRO complaint data in natural language
+    - Knowledge Base page for admins to upload and manage datasets
+    - Role-based access control via Clerk (admin vs. standard user)
+    - Persistent chat history with create/load/delete functionality
 
-You should also include a short description of what each part of your code does. (Detailed description in the readme of each directory, if applicable)
-* /path/to/directory - function and description
-  - Key notes
-* /path/to/script - function and description
-  - Key notes
-* Lorem Ipsum - Dolor Sit Amet
-  - Consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
-* Duis Aute Irure Dolor
-  - Excepteur sint occaecat
-* Excepteur Sint Occaecat
-  - Curabitur efficitur, nunc non ultricies gravida, felis purus posuere eros, sed faucibus sapien est nec quam. Nulla at nisl nisl.
- 
-## How To Use
+  * `/backend_chatbot_fastapi` - Primary Python FastAPI backend
+    - `POST /ingest` — Upload CSV/Excel complaint data; auto-cleans, deduplicates, and indexes into
+  Vertex AI RAG corpus
+    - `POST /query` — Natural language querying powered by Gemini + Vertex AI RAG Engine with cited
+  sources
+    - In-memory caching and rate limiting to reduce API calls by ~90%
 
-To clone and run this application, you'll need <a href="https://git-scm.com" target="_blank">Git</a>
-From your command line:
+  * `/backend` - Legacy Express.js backend (Node.js)
+    - MongoDB-backed chat persistence with protected CRUD routes
+    - GCS file proxy for downloads
+    - Clerk authentication middleware
 
-```bash
-# Clone this repository
-$ git clone [repo link]
+  * `/data_analysis/scripts` - Exploratory data analysis notebooks
+    - EDA on POST Commission complaint data and DESE datasets
+    - Demographic breakdowns, complaint trends, and school-level analysis
 
-# Further Instructions
-...
-```
+  ## How To Use
 
-Create a new branch from dev, add changes on the new branch you just created.
+  To clone and run this application, you'll need <a href="https://git-scm.com" 
+  target="_blank">Git</a>, Node.js, and Python 3.9+.
 
-You will want to look into <a href="https://git-scm.com/docs/git-branch" target="_blank">git branch</a> and <a href="https://git-scm.com/docs/git-checkout" target="_blank">git checkout</a>
+  ```bash
+  # Clone this repository
+  $ git clone https://github.com/BU-Spark/dd4g-cfjj.git
 
-```bash
-# Create and Checkout a new branch if it doesn't exist
-$ git checkout -b your-branch main
-...
-```
+  # Install frontend dependencies
+  $ cd frontend && npm install
 
-Open a Pull Request to dev. Add your PM and TPM as reviewers. 
+  # Install FastAPI backend dependencies
+  $ cd ../backend_chatbot_fastapi && pip install -r requirements.txt
 
-At the end of the semester during project wrap up open a final Pull Request to main from dev branch.
- 
-## Project Description
+  # Install Express backend dependencies
+  $ cd ../backend && npm install
 
-In this section, you should include the project description, either from the client or spark.
+  Set up environment variables:
 
-Please make sure it reflects what you see on the documents (project description) you recieved.
+  # backend_chatbot_fastapi/.env
+  GCP_PROJECT_ID=dd4g-cfjj-chatbot
+  GCS_BUCKET_NAME=sro-complaints-data-dd4g-cfjj-chatbot
+  LOCATION=us-east5
+  GOOGLE_API_KEY=<your Gemini API key>
+  GEMINI_MODEL=gemini-2.5-flash
+  GOOGLE_APPLICATION_CREDENTIALS=<path to GCP service account JSON>
 
-* Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla facilisi. Donec vel nunc at libero ultrices tincidunt. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae; Mauris ut ligula nec risus posuere ultricies at et ligula. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas.
-* Veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+  # backend/.env
+  CLERK_SECRET_KEY=sk_...
+  MONGODB_URI=mongodb+srv://...
+  PORT=3001
 
-## Data locations
+  # frontend/.env
+  VITE_CLERK_PUBLISHABLE_KEY=pk_...
+  VITE_API_URL=http://localhost:3001
 
-In this section, you should include the location of all of your datasets for the project (if applicable)
+  Run all three services:
 
-<a href="dataset-documentation">Dataset Documentation</a>
-* Location 1: [location]
-  - [description]
-* Location 2: [location]
-  - [description]
+  # Terminal 1 — FastAPI backend
+  $ cd backend_chatbot_fastapi && uvicorn backend:app --reload --port 8000
+
+  # Terminal 2 — Express backend
+  $ cd backend && npm run dev
+
+  # Terminal 3 — Frontend
+  $ cd frontend && npm run dev
+
+  Create a new branch from main, add changes on the new branch you just created.
+
+  $ git checkout -b your-branch main
+
+  Open a Pull Request to main. Add your PM and TPM as reviewers.
+
+  Project Description
+
+  This project was built for Citizens for Juvenile Justice (CFJJ) through the BU Spark! × MassMutual
+   Data-Driven for Good program (Spring 2026).
+
+  - CFJJ advocates for juvenile justice reform in Massachusetts and needed a way to analyze School
+  Resource Officer (SRO) complaint data from the POST Commission — a dataset covering complaints
+  involving youth under 18. The goal was to make this data accessible to non-technical staff without
+   requiring SQL queries or manual spreadsheet analysis.
+  - The platform allows CFJJ staff to upload complaint datasets (CSV/Excel) and query them
+  conversationally through an AI chatbot. All answers are grounded exclusively in the uploaded data,
+   with cited sources and similarity scores, ensuring accuracy and traceability. Admins can
+  continuously update the knowledge base with new data, and the chatbot automatically reflects the
+  latest uploads.
+
+  Data Locations
+
+  Dataset Documentation
+
+  - dataset-documentation/ — Data dictionary and dataset documentation
+    - Covers POST Commission complaint data and DESE datasets
+  - Google Cloud Storage: gs://sro-complaints-data-dd4g-cfjj-chatbot/
+    - Processed JSONL complaint files uploaded by admins and indexed into Vertex AI RAG corpus
+  - data_analysis/scripts/ — Raw EDA notebooks
+    - EDA-POSTC-request.ipynb — POST Commission complaint analysis
+    - EDA-DESE.ipynb — DESE school data analysis
+    - Combined_Analysis.ipynb — Combined demographic and complaint trends
+
