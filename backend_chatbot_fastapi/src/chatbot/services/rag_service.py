@@ -144,7 +144,7 @@ class RAGService:
 
         return context
 
-    def generate_answer(self, question: str, context: str) -> Dict[str, Any]:
+    def generate_answer(self, question: str, context: str, history: List[Dict] = None) -> Dict[str, Any]:
         """
         Generate answer using Gemini with retrieved context
 
@@ -165,6 +165,15 @@ class RAGService:
                 "reasoning": "No relevant data found in corpus"
             }
 
+        # Build conversation history section for the prompt
+        history_text = ""
+        if history:
+            history_lines = []
+            for msg in history:
+                role_label = "User" if msg["role"] == "user" else "Assistant"
+                history_lines.append(f"{role_label}: {msg['content']}")
+            history_text = "\n\nPrevious conversation:\n" + "\n".join(history_lines) + "\n"
+
         prompt = f"""You are a specialized assistant that ONLY answers questions about School Resource Officer (SRO) complaint data from the Massachusetts POST Commission.
 
 STRICT RULES:
@@ -174,6 +183,7 @@ STRICT RULES:
 4. NEVER use external knowledge or make assumptions beyond what's in the data
 5. NEVER answer general questions about SROs, policing, schools, or any other topic unless directly answering based on the specific complaint data provided
 
+{history_text}
 Question: {question}
 
 Available Complaint Records:
@@ -254,7 +264,8 @@ Answer:"""
         self,
         corpus_name: str,
         question: str,
-        top_k: int = None
+        top_k: int = None,
+        history: List[Dict] = None
     ) -> RAGQueryResponse:
         """
         Complete RAG pipeline: retrieve documents and generate answer
@@ -280,7 +291,7 @@ Answer:"""
             context = self.build_context(relevant_docs)
 
             # Generate answer using Gemini
-            answer_data = self.generate_answer(question, context)
+            answer_data = self.generate_answer(question, context, history=history)
 
             # Format sources for display
             sources = self.format_sources(relevant_docs)

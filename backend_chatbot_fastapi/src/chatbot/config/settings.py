@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     # Rate Limiting Configuration
     max_requests_per_minute: int = 10  # Conservative limit to avoid quota exhaustion
 
+    # MongoDB Configuration
+    mongodb_uri: str
+    mongodb_db_name: str = "cfjj_chatbot"
+
+    # Clerk Authentication
+    clerk_secret_key: Optional[str] = None
+
     # Optional: Service Account Key Path
     google_application_credentials: Optional[str] = None
 
