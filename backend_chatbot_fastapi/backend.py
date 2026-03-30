@@ -3,7 +3,7 @@ FastAPI Backend for SRO Complaints Chatbot
 Simple and clean API with 2 routes: /ingest and /query
 """
 
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional
@@ -17,6 +17,9 @@ from src.chatbot.utils.logger import setup_logger
 from src.chatbot.utils.exceptions import IngestionError, RAGError
 from src.chatbot.utils.cache import query_cache, corpus_cache
 from src.chatbot.utils.rate_limiter import query_rate_limiter
+from src.chatbot.auth.clerk import ClerkUser, get_current_user, require_admin
+from src.chatbot.db.mongo import connect_db, close_db
+from src.chatbot.routes.chats import router as chats_router
 
 logger = setup_logger(__name__)
 
@@ -40,14 +43,23 @@ app.add_middleware(
 ingestion_service = IngestionService()
 rag_service = RAGService()
 
+# Register routers
+app.include_router(chats_router)
+
 
 # ============================================================================
 # REQUEST/RESPONSE MODELS
 # ============================================================================
 
+class HistoryMessage(BaseModel):
+    role: str    # "user" | "assistant"
+    content: str
+
+
 class QueryRequest(BaseModel):
     """Request model for querying"""
     question: str = Field(..., min_length=1, description="The question to ask")
+    history: Optional[list[HistoryMessage]] = Field(default=[], description="Previous messages for multi-turn context")
     corpus_name: Optional[str] = Field(None, description="RAG corpus name (optional)")
     top_k: Optional[int] = Field(5, ge=1, le=20, description="Number of documents to retrieve")
 
@@ -99,7 +111,7 @@ async def health_check():
 
 
 @app.post("/cache/clear")
-async def clear_cache():
+async def clear_cache(user: ClerkUser = Depends(require_admin)):
     """
     Clear all caches (query cache and corpus cache)
 
@@ -115,7 +127,7 @@ async def clear_cache():
 
 
 @app.get("/cache/stats")
-async def cache_stats():
+async def cache_stats(user: ClerkUser = Depends(get_current_user)):
     """
     Get cache statistics
 
@@ -129,7 +141,7 @@ async def cache_stats():
 
 
 @app.get("/corpus/status")
-async def corpus_status():
+async def corpus_status(user: ClerkUser = Depends(get_current_user)):
     """
     Check corpus status and availability
 
@@ -181,7 +193,7 @@ async def corpus_status():
 
 
 @app.get("/corpus/files")
-async def list_corpus_files():
+async def list_corpus_files(user: ClerkUser = Depends(get_current_user)):
     """
     List all files in the RAG corpus
 
@@ -234,7 +246,7 @@ async def list_corpus_files():
 
 
 @app.post("/ingest", response_model=IngestionResponse)
-async def ingest_data(file: UploadFile = File(...)):
+async def ingest_data(file: UploadFile = File(...), user: ClerkUser = Depends(require_admin)):
     """
     Ingest complaint data from CSV/Excel file
 
@@ -304,7 +316,7 @@ async def ingest_data(file: UploadFile = File(...)):
 
 
 @app.post("/query", response_model=QueryResponse)
-async def query_chatbot(request: QueryRequest):
+async def query_chatbot(request: QueryRequest, user: ClerkUser = Depends(get_current_user)):
     """
     Query the RAG chatbot with a question
 
@@ -382,10 +394,12 @@ async def query_chatbot(request: QueryRequest):
                 logger.info(f"Using cached corpus: {corpus_name}")
 
         # Query the RAG service
+        history = [{"role": m.role, "content": m.content} for m in (request.history or [])]
         result: RAGQueryResponse = rag_service.query(
             corpus_name=corpus_name,
             question=request.question,
-            top_k=request.top_k
+            top_k=request.top_k,
+            history=history
         )
 
         logger.info(f"Query completed successfully with {result.num_sources} sources")
@@ -427,6 +441,7 @@ async def startup_event():
     logger.info(f"GCP Project: {settings.gcp_project_id}")
     logger.info(f"GCS Bucket: {settings.gcs_bucket_name}")
     logger.info(f"Vertex AI Location: {settings.vertex_ai_location}")
+    await connect_db()
     logger.info("API ready to accept requests")
 
 
@@ -434,6 +449,7 @@ async def startup_event():
 async def shutdown_event():
     """Run on application shutdown"""
     logger.info("Shutting down SRO Complaints Chatbot API...")
+    await close_db()
 
 
 if __name__ == "__main__":
