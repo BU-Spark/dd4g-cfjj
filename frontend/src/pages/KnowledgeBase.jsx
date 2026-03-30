@@ -4,13 +4,9 @@ import {
     UploadCloud, FileSpreadsheet, CheckCircle2,
     RefreshCw, Database, HardDrive, FileText, Loader2, AlertCircle, Lock, X
 } from 'lucide-react';
-import { useUser } from '@clerk/react';
+import { useUser, useAuth } from '@clerk/react';
 import { cn } from '../lib/utils';
-<<<<<<< HEAD
-import { uploadCSV } from '../api/client';
-=======
 import { createApiClient } from '../lib/api';
->>>>>>> main
 
 const NARRATIVE_KEYWORDS = ['narrative', 'description', 'summary', 'notes', 'comment', 'text', 'detail'];
 const STRUCTURED_KEYWORDS = ['id', 'date', 'code', 'status', 'type', 'number', 'count', 'flag'];
@@ -63,6 +59,8 @@ const getStatusIcon = (status) => {
 
 export default function KnowledgeBase() {
     const { user } = useUser();
+    const { getToken } = useAuth();
+    const api = createApiClient(getToken);
     const isAdmin = user?.publicMetadata?.role === 'admin';
 
     const [isDragging, setIsDragging] = useState(false);
@@ -83,10 +81,7 @@ export default function KnowledgeBase() {
         setLoading(true);
         setError(null);
         try {
-            const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-            const response = await fetch(`${BASE}/corpus/files`);
-            const data = await response.json();
-
+            const data = await api.listRagFiles();
             if (data.files) {
                 setCorpusFiles(data.files);
             }
@@ -130,14 +125,10 @@ export default function KnowledgeBase() {
         setUploading(true);
 
         try {
-            await api.uploadRagFile(file);
+            const res = await api.uploadRagFile(file);
             setUploadedFiles(f => f.map(entry =>
                 entry.id === newEntry.id
-<<<<<<< HEAD
-                    ? { ...entry, status: 'Ready', records: res.total_complaints?.toLocaleString() ?? entry.records, type: entry.type }
-=======
-                    ? { ...entry, status: 'Ready' }
->>>>>>> main
+                    ? { ...entry, status: 'Ready', records: res.total_complaints?.toLocaleString() ?? entry.records }
                     : entry
             ));
         } catch (err) {

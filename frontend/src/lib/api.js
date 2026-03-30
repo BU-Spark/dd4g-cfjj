@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 export function createApiClient(getToken) {
     async function authFetch(path, options = {}) {
@@ -13,7 +13,7 @@ export function createApiClient(getToken) {
         });
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            throw new Error(err.error || `Request failed: ${res.status}`);
+            throw new Error(err.detail || err.error || `Request failed: ${res.status}`);
         }
         return res.json();
     }
@@ -31,27 +31,18 @@ export function createApiClient(getToken) {
         }),
         deleteChat: (id) => authFetch(`/api/chats/${id}`, { method: 'DELETE' }),
 
-        listRagFiles: () => authFetch('/api/rag/files'),
+        listRagFiles: () => authFetch('/corpus/files'),
 
-        downloadRagFile: async (gcsUri) => {
-            const token = await getToken();
-            const res = await fetch(`${API_URL}/api/rag/files/download?uri=${encodeURIComponent(gcsUri)}`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-            return res.blob();
-        },
-
-        queryMessage: (message, history) => authFetch('/api/query', {
+        queryMessage: (message, history) => authFetch('/query', {
             method: 'POST',
-            body: JSON.stringify({ message, history }),
+            body: JSON.stringify({ question: message, history }),
         }),
 
         uploadRagFile: async (file) => {
             const token = await getToken();
             const form = new FormData();
             form.append('file', file);
-            const res = await fetch(`${API_URL}/api/rag/files/upload`, {
+            const res = await fetch(`${API_URL}/ingest`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
                 body: form,

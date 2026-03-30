@@ -6,7 +6,6 @@ import {
 import { useAuth } from '@clerk/react';
 import { cn } from '../lib/utils';
 import { createApiClient } from '../lib/api';
-import { sendMessage } from '../api/client';
 
 export default function Chat() {
     const { getToken } = useAuth();
@@ -96,18 +95,9 @@ export default function Chat() {
                 await api.appendMessage(chatId, 'user', text);
             }
 
-<<<<<<< HEAD
-            // Call RAG backend to get answer
-            const response = await sendMessage(text);
-            const assistantMessage = { role: 'assistant', content: response.answer };
-
-            await api.appendMessage(chatId, 'assistant', response.answer);
-            setMessages(prev => [...prev, assistantMessage]);
-=======
             const { answer } = await api.queryMessage(text, messages);
             await api.appendMessage(chatId, 'assistant', answer);
             setMessages(prev => [...prev, { role: 'assistant', content: answer }]);
->>>>>>> main
 
         } catch (err) {
             console.error('Send failed:', err);
